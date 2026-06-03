@@ -693,7 +693,7 @@ static LLT getHalfSizedType(LLT Ty) {
   }
 
   assert(Ty.getScalarSizeInBits() % 2 == 0);
-  return LLT::scalar(Ty.getScalarSizeInBits() / 2);
+  return Ty.changeElementSize(Ty.getScalarSizeInBits() / 2);
 }
 
 // Build one or more V_READFIRSTLANE_B32 instructions to move the given vector
