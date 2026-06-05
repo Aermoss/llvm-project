@@ -3808,8 +3808,8 @@ static void RenderOpenCLOptions(const ArgList &Args, ArgStringList &CmdArgs,
   }
 }
 
-static void RenderHLSLOptions(const ArgList &Args, ArgStringList &CmdArgs,
-                              types::ID InputType) {
+static void RenderHLSLOptions(const Driver &D, const ArgList &Args,
+                              ArgStringList &CmdArgs, types::ID InputType) {
   const unsigned ForwardedArguments[] = {
       options::OPT_hlsl_all_resources_bound,
       options::OPT_dxil_validator_version,
@@ -3837,6 +3837,25 @@ static void RenderHLSLOptions(const ArgList &Args, ArgStringList &CmdArgs,
   if (!Args.hasArg(options::OPT_dxc_no_stdinc) &&
       !Args.hasArg(options::OPT_nostdinc))
     CmdArgs.push_back("-finclude-default-header");
+  bool Zi = Args.hasArg(options::OPT_g_Flag);
+  bool Qembed_debug = Args.hasArg(options::OPT_dxc_Qembed_debug);
+  Arg *Fd = Args.getLastArg(options::OPT_dxc_Fd);
+  if (Zi && !Fd && !Qembed_debug) {
+    D.Diag(diag::warn_drv_dxc_no_output_for_debug);
+    Qembed_debug = true;
+  }
+  if (Qembed_debug && !Zi)
+    D.Diag(diag::err_drv_no_debug_info_for_embed_debug);
+  if (Fd && !Zi)
+    D.Diag(diag::err_drv_no_debug_info_for_Fd);
+  if (Qembed_debug) {
+    CmdArgs.push_back("-mllvm");
+    CmdArgs.push_back("--dx-embed-debug");
+  }
+  if (Fd) {
+    CmdArgs.push_back("-mllvm");
+    CmdArgs.push_back(Args.MakeArgString("--dx-Fd=" + Twine(Fd->getValue())));
+  }
 }
 
 static void RenderOpenACCOptions(const Driver &D, const ArgList &Args,
@@ -7204,7 +7223,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   RenderOpenCLOptions(Args, CmdArgs, InputType);
 
   // Forward hlsl options to -cc1
-  RenderHLSLOptions(Args, CmdArgs, InputType);
+  RenderHLSLOptions(D, Args, CmdArgs, InputType);
 
   // Forward OpenACC options to -cc1
   RenderOpenACCOptions(D, Args, CmdArgs, InputType);
