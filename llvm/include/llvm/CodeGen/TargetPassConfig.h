@@ -327,6 +327,9 @@ public:
   /// the MachineVerifier if it is enabled.
   void addMachinePostPasses(const std::string &Banner);
 
+  /// Check whether GlobalISel was explicitly enabled on the command line.
+  bool isGlobalISelEnabled() const;
+
   /// Check whether or not GlobalISel should abort on error.
   /// When this is disabled, GlobalISel will fall back on SDISel instead of
   /// erroring out.
