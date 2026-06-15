@@ -318,6 +318,7 @@ def int_amdgcn_s_barrier_join : ClangBuiltin<"__builtin_amdgcn_s_barrier_join">,
 
 // void @llvm.amdgcn.s.wakeup.barrier(ptr addrspace(3) %barrier)
 // The %barrier argument must be uniform, otherwise behavior is undefined.
+let TargetFeatures = "s-wakeup-barrier-inst" in
 def int_amdgcn_s_wakeup_barrier : ClangBuiltin<"__builtin_amdgcn_s_wakeup_barrier">,
   Intrinsic<[], [local_ptr_ty], [IntrNoMem, IntrHasSideEffects, IntrConvergent, IntrWillReturn,
                                 IntrNoCallback, IntrNoFree]>;
@@ -475,6 +476,7 @@ def int_amdgcn_fmul_legacy : ClangBuiltin<"__builtin_amdgcn_fmul_legacy">,
 // intended for use on subtargets that have the v_fma_legacy_f32 and/or
 // v_fmac_legacy_f32 instructions. (Note that v_fma_legacy_f16 is unrelated and
 // has a completely different kind of legacy behaviour.)
+let TargetFeatures = "gfx10-3-insts" in
 def int_amdgcn_fma_legacy :
   PureIntrinsic<[llvm_float_ty], [llvm_float_ty, llvm_float_ty, llvm_float_ty],
   [Commutative]
@@ -586,6 +588,7 @@ def int_amdgcn_fmad_ftz :
             [LLVMMatchType<0>, LLVMMatchType<0>, LLVMMatchType<0>]
 >;
 
+let TargetFeatures = "tanh-insts" in
 def int_amdgcn_tanh : PureIntrinsic<
   [llvm_anyfloat_ty], [LLVMMatchType<0>]
 >;
@@ -915,6 +918,7 @@ class AMDGPUAVStore : Intrinsic <
   [SDNPMemOperand, SDNPMayStore]
 >;
 
+let TargetFeatures = "flat-global-insts" in
 def int_amdgcn_av_store_b128 : AMDGPUAVStore;
 
 class AMDGPUAVLoad : Intrinsic <
@@ -927,6 +931,7 @@ class AMDGPUAVLoad : Intrinsic <
   [SDNPMemOperand, SDNPMayLoad]
 >;
 
+let TargetFeatures = "flat-global-insts" in
 def int_amdgcn_av_load_b128 : AMDGPUAVLoad;
 
 } // TargetPrefix = "amdgcn"
@@ -2159,6 +2164,7 @@ def int_amdgcn_exp_row : DefaultAttrsIntrinsic <[], [
 >;
 
 // exp with compr bit set. Not supported on GFX11+.
+let TargetFeatures = "-gfx11-insts" in
 def int_amdgcn_exp_compr : DefaultAttrsIntrinsic <[], [
   llvm_i32_ty,       // tgt,
   llvm_i32_ty,       // en
@@ -2882,6 +2888,7 @@ def int_amdgcn_wait_asyncmark :
 //===----------------------------------------------------------------------===//
 
 // llvm.amdgcn.permlane16 <old> <src0> <src1> <src2> <fi> <bound_control>
+let TargetFeatures = "permlane16-insts" in
 def int_amdgcn_permlane16 :
   Intrinsic<[llvm_any_ty],
             [LLVMMatchType<0>, LLVMMatchType<0>, llvm_i32_ty, llvm_i32_ty, llvm_i1_ty, llvm_i1_ty],
@@ -2889,6 +2896,7 @@ def int_amdgcn_permlane16 :
              ImmArg<ArgIndex<4>>, ImmArg<ArgIndex<5>>, IntrNoCallback, IntrNoFree]>;
 
 // llvm.amdgcn.permlanex16 <old> <src0> <src1> <src2> <fi> <bound_control>
+let TargetFeatures = "permlane16-insts" in
 def int_amdgcn_permlanex16 :
   Intrinsic<[llvm_any_ty],
             [LLVMMatchType<0>, LLVMMatchType<0>, llvm_i32_ty, llvm_i32_ty, llvm_i1_ty, llvm_i1_ty],
@@ -2898,6 +2906,7 @@ def int_amdgcn_permlanex16 :
 // llvm.amdgcn.mov.dpp8 <src> <sel>
 // <sel> is a 32-bit constant whose high 8 bits must be zero which selects
 // the lanes to read from.
+let TargetFeatures = "dpp8" in
 def int_amdgcn_mov_dpp8 :
   Intrinsic<[llvm_any_ty],
             [LLVMMatchType<0>, llvm_i32_ty],
@@ -2920,6 +2929,7 @@ class AMDGPUAtomicRtn<LLVMType vt, LLVMType pt = llvm_anyptr_ty> : Intrinsic <
 //                                           <ray_dir>, <ray_inv_dir>, <texture_descr>
 // <node_ptr> is i32 or i64.
 // <ray_dir> and <ray_inv_dir> are both v3f16 or both v3f32.
+let TargetFeatures = "gfx10_a-encoding" in
 def int_amdgcn_image_bvh_intersect_ray :
   DefaultAttrsIntrinsic<[llvm_v4i32_ty],
             [llvm_anyint_ty, llvm_float_ty, llvm_v3f32_ty, llvm_anyvector_ty,
@@ -3068,6 +3078,7 @@ def int_amdgcn_ds_bvh_stack_push8_pop2_rtn : IntDSBVHStackRtn<vdst  = llvm_i64_t
 //                                            <instance_mask>, <ray_origin>,
 //                                            <ray_dir>, <offsets>,
 //                                            <texture_descr>
+let TargetFeatures = "bvh-dual-bvh-8-insts" in
 def int_amdgcn_image_bvh_dual_intersect_ray :
   Intrinsic<[llvm_v10i32_ty, llvm_v3f32_ty, llvm_v3f32_ty],
             [llvm_i64_ty, llvm_float_ty, llvm_i8_ty, llvm_v3f32_ty,
@@ -3079,6 +3090,7 @@ def int_amdgcn_image_bvh_dual_intersect_ray :
 //                                        <instance_mask>, <ray_origin>,
 //                                        <ray_dir>, <offset>,
 //                                        <texture_descr>
+let TargetFeatures = "bvh-dual-bvh-8-insts" in
 def int_amdgcn_image_bvh8_intersect_ray :
   Intrinsic<[llvm_v10i32_ty, llvm_v3f32_ty, llvm_v3f32_ty],
             [llvm_i64_ty, llvm_float_ty, llvm_i8_ty, llvm_v3f32_ty,
@@ -3403,6 +3415,7 @@ def int_amdgcn_udot4 :
 // a[i in 0. . . 3] = (%a_sign ? a.i8[i] : promoteToSigned(a.u8[i]));
 // b[i in 0. . . 3] = (%b_sign ? b.i8[i] : promoteToSigned(b.u8[i]));
 //   %r = %a[0] * %b[0] + %a[1] * %b[1] + %a[2] * %b[2] + %a[3] * %b[3] + %c
+let TargetFeatures = "dot8-insts" in
 def int_amdgcn_sudot4 :
   ClangBuiltin<"__builtin_amdgcn_sudot4">,
   PureIntrinsic<
@@ -3456,6 +3469,7 @@ def int_amdgcn_udot8 :
 // b[i in 0. . . 7] = (%b_sign ? b.i4[i] : promoteToSigned(b.u4[i]));
 //   %r = %a[0] * %b[0] + %a[1] * %b[1] + %a[2] * %b[2] + %a[3] * %b[3] +
 //        %a[4] * %b[4] + %a[5] * %b[5] + %a[6] * %b[6] + %a[7] * %b[7] + %c
+  let TargetFeatures = "dot8-insts" in
   def int_amdgcn_sudot8 :
   ClangBuiltin<"__builtin_amdgcn_sudot8">,
   PureIntrinsic<
