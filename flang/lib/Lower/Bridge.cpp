@@ -91,6 +91,12 @@ static llvm::cl::opt<bool> forceLoopToExecuteOnce(
     "always-execute-loop-body", llvm::cl::init(false),
     llvm::cl::desc("force the body of a loop to execute at least once"));
 
+llvm::cl::opt<bool> wrapUnstructuredConstructsInExecuteRegion(
+    "wrap-unstructured-constructs-in-execute-region", llvm::cl::init(true),
+    llvm::cl::desc(
+        "wrap each unstructured DO construct whose body only exits via the "
+        "construct exit in an scf.execute_region op"));
+
 namespace {
 /// Information for generating a structured or unstructured increment loop.
 struct IncrementLoopInfo {
@@ -2534,6 +2540,31 @@ private:
     Fortran::lower::pft::Evaluation &eval = getEval();
     bool unstructuredContext = eval.lowerAsUnstructured();
 
+    // Pre-wrap: build the DO's CFG inside a fresh scf.execute_region and
+    // redirect its construct exit to the region's yield block.
+    mlir::scf::ExecuteRegionOp preWrapOp;
+    mlir::Block *preWrapSavedExitBlock = nullptr;
+    // OpenACC takes over the DO's lowering: a DO that becomes an acc.loop
+    // (driven by an enclosing compute construct) or that is absorbed by a
+    // collapse clause must not be wrapped here -- the ACC code paths drive
+    // the DoConstruct directly.
+    if (unstructuredContext && Fortran::lower::pft::isWrappableConstruct(eval)) {
+      mlir::Location loc = toLocation();
+      preWrapOp = mlir::scf::ExecuteRegionOp::create(
+          *builder, loc, mlir::TypeRange{}, /*noInline=*/builder->getUnitAttr());
+      mlir::Block *entry = builder->createBlock(&preWrapOp.getRegion());
+      builder->setInsertionPointToEnd(entry);
+      createEmptyBlocks(eval.getNestedEvaluations());
+      mlir::Block *yieldBlock = builder->createBlock(&preWrapOp.getRegion());
+      builder->setInsertionPointToEnd(yieldBlock);
+      mlir::scf::YieldOp::create(*builder, loc);
+      if (eval.constructExit) {
+        preWrapSavedExitBlock = eval.constructExit->block;
+        eval.constructExit->block = yieldBlock;
+      }
+      builder->setInsertionPointToEnd(entry);
+    }
+
     // If this do-loop was absorbed by a collapse clause on a parent acc.loop,
     // skip generating any loop — just lower the body.  The IV value is
     // already available from the parent acc.loop's block argument.
@@ -2706,6 +2737,13 @@ private:
     for (IncrementLoopInfo &info : incrementLoopNestInfo)
       if (auto loopOp = mlir::dyn_cast_if_present<fir::DoLoopOp>(info.loopOp))
         attachAttributesToDoLoopOperations(loopOp, doStmtEval.dirs);
+
+    // Finalize the pre-wrap if it fired.
+    if (preWrapOp) {
+      if (eval.constructExit)
+        eval.constructExit->block = preWrapSavedExitBlock;
+      builder->setInsertionPointAfter(preWrapOp);
+    }
   }
 
   /// Generate FIR to evaluate loop control values (lower, upper and step).
@@ -3188,6 +3226,27 @@ private:
     llvm::SmallVector<Fortran::lower::pft::Evaluation *> exits, fallThroughs;
     collectFinalEvaluations(eval, exits, fallThroughs);
 
+    // Pre-wrap: build the IF's CFG inside a fresh scf.execute_region and
+    // redirect its construct exit to the region's yield block.
+    mlir::scf::ExecuteRegionOp wrapOp = nullptr;
+    mlir::Block *savedExitBlock = nullptr;
+    if (Fortran::lower::pft::isWrappableConstruct(eval)) {
+      mlir::Location loc = toLocation();
+      wrapOp = mlir::scf::ExecuteRegionOp::create(
+          *builder, loc, mlir::TypeRange{}, /*noInline=*/builder->getUnitAttr());
+      mlir::Block *entry = builder->createBlock(&wrapOp.getRegion());
+      builder->setInsertionPointToEnd(entry);
+      createEmptyBlocks(eval.getNestedEvaluations());
+      mlir::Block *yieldBlock = builder->createBlock(&wrapOp.getRegion());
+      builder->setInsertionPointToEnd(yieldBlock);
+      mlir::scf::YieldOp::create(*builder, loc);
+      if (eval.constructExit) {
+        savedExitBlock = eval.constructExit->block;
+        eval.constructExit->block = yieldBlock;
+      }
+      builder->setInsertionPointToEnd(entry);
+    }
+
     for (Fortran::lower::pft::Evaluation &e : eval.getNestedEvaluations()) {
       auto genIfBranch = [&](mlir::Value cond) {
         if (e.lexicalSuccessor == e.controlSuccessor) // empty block -> exit
@@ -3215,6 +3274,14 @@ private:
             genBranch(e.lexicalSuccessor->block);
         }
       }
+    }
+
+    if (wrapOp) {
+      // Restore the construct exit pointer (it's shared with siblings).
+      if (eval.constructExit)
+        eval.constructExit->block = savedExitBlock;
+      // Builder continues after the wrap in the parent block.
+      builder->setInsertionPointAfter(wrapOp);
     }
   }
 
@@ -6372,7 +6439,16 @@ private:
       if (eval.isNewBlock)
         eval.block = builder->createBlock(region);
       if (eval.isConstruct() || eval.isDirective()) {
-        if (eval.lowerAsUnstructured()) {
+        if (Fortran::lower::pft::isWrappableConstruct(eval)) {
+          // The wrap owns internal blocks; only create the entry block here
+          // so the enclosing CFG can branch to it.
+          if (eval.hasNestedEvaluations()) {
+            Fortran::lower::pft::Evaluation &constructStmt =
+                eval.getFirstNestedEvaluation();
+            if (constructStmt.isNewBlock)
+              constructStmt.block = builder->createBlock(region);
+          }
+        } else if (eval.lowerAsUnstructured()) {
           createEmptyBlocks(eval.getNestedEvaluations());
         } else if (eval.hasNestedEvaluations()) {
           // A structured construct that is a target starts a new block.

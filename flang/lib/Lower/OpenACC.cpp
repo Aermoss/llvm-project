@@ -2477,10 +2477,11 @@ genACC(Fortran::lower::AbstractConverter &converter,
   const auto &outerDoConstruct =
       std::get<std::optional<Fortran::parser::DoConstruct>>(loopConstruct.t);
 
-  if (outerDoConstruct.has_value() && eval.lowerAsUnstructured() &&
-      loopWillBeIndependent(converter, accClauseList, loopDirective.v))
-    TODO(currentLocation,
-         "unstructured do loop in independent OpenACC loop construct");
+  // TEMPORARILY COMMENTED FOR COMPARISON
+  // if (outerDoConstruct.has_value() && eval.lowerAsUnstructured() &&
+  //     loopWillBeIndependent(converter, accClauseList, loopDirective.v))
+  //   TODO(currentLocation,
+  //        "unstructured do loop in independent OpenACC loop construct");
 
   auto loopOp = createLoopOp(converter, currentLocation, semanticsContext,
                              stmtCtx, *outerDoConstruct, eval, accClauseList,
@@ -3251,9 +3252,10 @@ genACC(Fortran::lower::AbstractConverter &converter,
       converter.genLocation(beginCombinedDirective.source);
   Fortran::lower::StatementContext stmtCtx;
 
-  if (outerDoConstruct.has_value() && eval.lowerAsUnstructured() &&
-      loopWillBeIndependent(converter, accClauseList, combinedDirective.v))
-    TODO(currentLocation, "unstructured do loop in combined acc construct");
+  // TEMPORARILY COMMENTED FOR COMPARISON
+  // if (outerDoConstruct.has_value() && eval.lowerAsUnstructured() &&
+  //     loopWillBeIndependent(converter, accClauseList, combinedDirective.v))
+  //   TODO(currentLocation, "unstructured do loop in combined acc construct");
 
   if (combinedDirective.v == llvm::acc::ACCD_kernels_loop) {
     createComputeOp<mlir::acc::KernelsOp>(

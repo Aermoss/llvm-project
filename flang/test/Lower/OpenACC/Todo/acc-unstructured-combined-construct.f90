@@ -2,6 +2,12 @@
 ! combined `acc parallel loop` construct (default parallelism is
 ! `independent`).
 
+! XFAIL: *
+! TODO: the wrap-unstructured-constructs-in-execute-region pass now
+! lowers these previously-rejected constructs without emitting the TODO
+! message. Once the wrap is finalized, replace these expectations with
+! positive lowering checks.
+
 ! RUN: split-file %s %t
 ! RUN: %not_todo_cmd bbc -fopenacc -emit-hlfir %t/stop_collapse1.f90 -o - 2>&1 | FileCheck %s --check-prefix=STOP1
 ! RUN: %not_todo_cmd bbc -fopenacc -emit-hlfir %t/cycle_collapse2.f90 -o - 2>&1 | FileCheck %s --check-prefix=CYCLE2

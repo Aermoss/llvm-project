@@ -64,7 +64,7 @@ program p
       ! CHECK: arith.cmpi eq, %[[XVAL2]], %[[THREE]] : i32
       ! CHECK: ^bb
       ! CHECK: fir.call @_FortranAStopStatementText
-      ! CHECK: fir.unreachable
+      ! CHECK: scf.yield
       ! CHECK: ^bb
       if (x==3) stop 'Halt'
       ! CHECK: fir.call @_FortranAioOutputAscii
