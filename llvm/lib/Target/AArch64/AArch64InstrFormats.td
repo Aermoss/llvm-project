@@ -1876,9 +1876,9 @@ def phint_op : Operand<i32> {
     let ParserMatchClass = PHintInstOperand;
     let PrintMethod = "printPHintOp";
     let MCOperandPredicate = [{
-      if (!MCOp.isImm())
+      if (!MCOp.isImm() || MCOp.getImm() < 48)
         return false;
-      return AArch64PHint::lookupPHintByEncoding(MCOp.getImm()) != nullptr;
+      return AArch64PHint::lookupPHintByEncoding(MCOp.getImm() - 48) != nullptr;
     }];
     let OperandType = "OPERAND_IMMEDIATE";
     let MIOperandInfo = (ops i32imm: $policy);

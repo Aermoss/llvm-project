@@ -2450,34 +2450,17 @@ def : RWSysReg<"ACTLRALIAS_EL1",  0b11, 0b000, 0b0001, 0b0100, 0b101>;
 // v9.6a PCDPHINT instruction options.
 //===----------------------------------------------------------------------===//
 
-class PHint<string name, bits<7> encoding> {
+class PHint<string name, bits<1> encoding> : SearchableTable {
+  let SearchableFields = ["Name", "Encoding"];
+  let EnumValueField = "Encoding";
+
   string Name = name;
-  bits<7> Encoding;
+  bits<1> Encoding;
   let Encoding = encoding;
-  code Requires = [{ {} }];
 }
 
-def PHintValues : GenericEnum {
-  let FilterClass = "PHint";
-  let NameField = "Name";
-  let ValueField = "Encoding";
-}
-
-def PHintsList : GenericTable {
-  let FilterClass = "PHint";
-  let Fields = ["Name", "Encoding", "Requires"];
-
-  let PrimaryKey = ["Encoding"];
-  let PrimaryKeyName = "lookupPHintByEncoding";
-}
-
-def lookupPHintByName : SearchIndex {
-  let Table = PHintsList;
-  let Key = ["Name"];
-}
-
-def KEEP : PHint<"keep", 0b0110000>;
-def STRM : PHint<"strm", 0b0110001>;
+def : PHint<"keep", 0b0>;
+def : PHint<"strm", 0b1>;
 
 // v9.6a Realm management extension enhancements
 def : RWSysReg<"GPCBW_EL3", 0b11, 0b110, 0b0010, 0b0001, 0b101>;

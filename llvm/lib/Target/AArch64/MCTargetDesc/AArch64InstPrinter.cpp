@@ -2283,7 +2283,7 @@ void AArch64InstPrinter::printSyspXzrPair(const MCInst *MI, unsigned OpNum,
 void AArch64InstPrinter::printPHintOp(const MCInst *MI, unsigned OpNum,
                                       const MCSubtargetInfo &STI,
                                       raw_ostream &O) {
-  unsigned Op = MI->getOperand(OpNum).getImm();
+  unsigned Op = MI->getOperand(OpNum).getImm() - 48;
   auto PH = AArch64PHint::lookupPHintByEncoding(Op);
   if (PH)
     O << PH->Name;

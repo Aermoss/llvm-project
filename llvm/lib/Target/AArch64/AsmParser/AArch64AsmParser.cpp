@@ -2597,7 +2597,7 @@ public:
   static std::unique_ptr<AArch64Operand>
   CreatePHintInst(unsigned Val, StringRef Str, SMLoc S, MCContext &Ctx) {
     auto Op = std::make_unique<AArch64Operand>(k_PHint, Ctx);
-    Op->PHint.Val = Val;
+    Op->PHint.Val = Val + 48;
     Op->PHint.Data = Str.data();
     Op->PHint.Length = Str.size();
     Op->StartLoc = S;

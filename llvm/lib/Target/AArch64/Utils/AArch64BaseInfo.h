@@ -710,23 +710,12 @@ namespace AArch64PSBHint {
 }
 
 namespace AArch64PHint {
-struct PHint {
-  const char *Name;
-  unsigned Encoding;
-  FeatureBitset FeaturesRequired;
-
-  bool haveFeatures(FeatureBitset ActiveFeatures) const {
-    return ActiveFeatures[llvm::AArch64::FeatureAll] ||
-           (FeaturesRequired & ActiveFeatures) == FeaturesRequired;
-  }
+struct PHint : SysAlias {
+  using SysAlias::SysAlias;
 };
 
-#define GET_PHintValues_DECL
-#define GET_PHintsList_DECL
+#define GET_PHINT_DECL
 #include "AArch64GenSystemOperands.inc"
-
-const PHint *lookupPHintByName(StringRef);
-const PHint *lookupPHintByEncoding(uint8_t);
 } // namespace AArch64PHint
 
 namespace AArch64BTIHint {
