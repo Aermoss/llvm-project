@@ -64,6 +64,8 @@ StringRef Triple::getArchTypeName(ArchType Kind) {
     return "kalimba";
   case lanai:
     return "lanai";
+  case zodiac:
+    return "zodiac";
   case loongarch32:
     return "loongarch32";
   case loongarch64:
@@ -325,6 +327,8 @@ StringRef Triple::getArchTypePrefix(ArchType Kind) {
     return "kalimba";
   case lanai:
     return "lanai";
+  case zodiac:
+    return "zodiac";
   case shave:
     return "shave";
   case wasm32:
