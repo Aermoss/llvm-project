@@ -576,6 +576,7 @@ set(LLVM_ALL_TARGETS
   BPF
   Hexagon
   Lanai
+  Zodiac
   LoongArch
   Mips
   MSP430
