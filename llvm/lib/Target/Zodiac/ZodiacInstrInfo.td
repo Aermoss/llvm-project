@@ -1,4 +1,4 @@
-//===-- ZodiacInstrInfo.td - Target Description for Zodiac Target -----------===//
+//===-- ZodiacInstrInfo.td - Zodiac Instruction defs ---------*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -7,879 +7,386 @@
 //===----------------------------------------------------------------------===//
 //
 // This file describes the Zodiac instructions in TableGen format.
+// Opcode values match the cpu.sv RTL definition.
 //
-//===----------------------------------------------------------------------===//
-
-//===----------------------------------------------------------------------===//
-// Instruction format superclass
 //===----------------------------------------------------------------------===//
 
 include "ZodiacInstrFormats.td"
 
-// -------------------------------------------------- //
-// Instruction Operands and Patterns
-// -------------------------------------------------- //
+// ===----------------------------------------------------------------------===//
+// Zodiac-specific ISD nodes
+// ===----------------------------------------------------------------------===//
 
-//  These are target-independent nodes, but have target-specific formats.
+def SDT_ZodiacCall : SDTypeProfile<0, -1, [SDTCisVT<0, i32>]>;
 def SDT_ZodiacCallSeqStart : SDCallSeqStart<[SDTCisVT<0, i32>,
-                                            SDTCisVT<1, i32>]>;
+                                              SDTCisVT<1, i32>]>;
 def SDT_ZodiacCallSeqEnd   : SDCallSeqEnd<[SDTCisVT<0, i32>,
-                                          SDTCisVT<1, i32>]>;
-def SDT_ZodiacCall         : SDTypeProfile<0, -1, [SDTCisVT<0, i32>]>;
-def SDT_ZodiacSetFlag      : SDTypeProfile<0,  2, [SDTCisSameAs<0, 1>]>;
-def SDT_ZodiacSelectCC     : SDTypeProfile<1,  3, [SDTCisSameAs<0, 1>,
-                                                  SDTCisSameAs<1, 2>]>;
-def SDT_ZodiacSetCC        : SDTypeProfile<1,  1, [SDTCisVT<0, i32>,
-                                                  SDTCisVT<1, i32>]>;
-def SDT_ZodiacBrCC         : SDTypeProfile<0,  2, [SDTCisVT<0, OtherVT>,
-                                                  SDTCisVT<1, i32>]>;
-def SDT_ZodiacAdjDynAlloc  : SDTypeProfile<1,  1, [SDTCisVT<0, i32>,
-                                                  SDTCisVT<1, i32>]>;
+                                            SDTCisVT<1, i32>]>;
 
-def Call             : SDNode<"ZodiacISD::CALL", SDT_ZodiacCall,
+def ZodiacCall       : SDNode<"ZodiacISD::CALL", SDT_ZodiacCall,
                               [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue,
                                SDNPVariadic]>;
-def RetGlue          : SDNode<"ZodiacISD::RET_GLUE", SDTNone,
+def ZodiacRetGlue    : SDNode<"ZodiacISD::RET_GLUE", SDTNone,
                               [SDNPHasChain, SDNPOptInGlue, SDNPVariadic]>;
 def CallSeqStart     : SDNode<"ISD::CALLSEQ_START", SDT_ZodiacCallSeqStart,
                               [SDNPHasChain, SDNPOutGlue]>;
 def CallSeqEnd       : SDNode<"ISD::CALLSEQ_END", SDT_ZodiacCallSeqEnd,
                               [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue]>;
-def ZodiacSetFlag     : SDNode<"ZodiacISD::SET_FLAG", SDT_ZodiacSetFlag,
-                              [SDNPOutGlue]>;
-def ZodiacSubbF       : SDNode<"ZodiacISD::SUBBF", SDT_ZodiacSetFlag,
-                              [SDNPOutGlue, SDNPInGlue]>;
-def ZodiacBrCC        : SDNode<"ZodiacISD::BR_CC", SDT_ZodiacBrCC,
-                              [SDNPHasChain, SDNPInGlue]>;
-def ZodiacSelectCC    : SDNode<"ZodiacISD::SELECT_CC", SDT_ZodiacSelectCC,
-                              [SDNPInGlue]>;
-def ZodiacSetCC       : SDNode<"ZodiacISD::SETCC", SDT_ZodiacSetCC,
-                              [SDNPInGlue]>;
-def ZodiacHi          : SDNode<"ZodiacISD::HI", SDTIntUnaryOp>;
-def ZodiacLo          : SDNode<"ZodiacISD::LO", SDTIntUnaryOp>;
-def ZodiacSmall       : SDNode<"ZodiacISD::SMALL", SDTIntUnaryOp>;
-def ZodiacAdjDynAlloc : SDNode<"ZodiacISD::ADJDYNALLOC", SDT_ZodiacAdjDynAlloc>;
 
-// Extract bits 0-15 (low-end) of an immediate value.
-def LO16 : SDNodeXForm<imm, [{
-  return CurDAG->getTargetConstant((uint64_t)N->getZExtValue() & 0xffff,
-                                   SDLoc(N), MVT::i32);
-}]>;
+def ZodiacHi21       : SDNode<"ZodiacISD::HI21", SDTIntUnaryOp>;
+def ZodiacLo11       : SDNode<"ZodiacISD::LO11", SDTIntUnaryOp>;
 
-// Extract bits 16-31 (high-end) of an immediate value.
-// Transformation function: shift the immediate value down into the low bits.
-def HI16 : SDNodeXForm<imm, [{
-  return CurDAG->getTargetConstant((uint64_t)N->getZExtValue() >> 16, SDLoc(N),
-                                   MVT::i32);
-}]>;
+def SDT_ZodiacBrCC : SDTypeProfile<0, 4, [SDTCisVT<0, OtherVT>, SDTCisVT<1, i32>, SDTCisVT<2, i32>, SDTCisVT<3, OtherVT>]>;
+def ZodiacBrCC : SDNode<"ZodiacISD::BR_CC", SDT_ZodiacBrCC, [SDNPHasChain]>;
 
-def NEG : SDNodeXForm<imm, [{
-  return CurDAG->getSignedTargetConstant(-N->getSExtValue(), SDLoc(N),
-                                         MVT::i32);
-}]>;
+def SDT_ZodiacSelectCC : SDTypeProfile<1, 5, [SDTCisSameAs<0, 1>, SDTCisSameAs<1, 2>, SDTCisVT<3, i32>, SDTCisVT<4, i32>, SDTCisVT<5, OtherVT>]>;
+def ZodiacSelectCC : SDNode<"ZodiacISD::SELECT_CC", SDT_ZodiacSelectCC>;
 
-def LO21 : SDNodeXForm<imm, [{
-  return CurDAG->getTargetConstant((uint64_t)N->getZExtValue() & 0x1fffff,
-                                   SDLoc(N), MVT::i32);
-}]>;
+// ===----------------------------------------------------------------------===//
+// Operand types
+// ===----------------------------------------------------------------------===//
 
-// Branch targets
-def BrTargetAsmOperand : AsmOperandClass {
-  let Name = "BrTarget";
-}
-def BrTarget   : Operand<OtherVT> {
-  let ParserMatchClass = BrTargetAsmOperand;
-  let EncoderMethod = "getBranchTargetOpValue";
-  let DecoderMethod = "decodeBranch";
+// Signed 16-bit immediate
+def simm16 : Operand<i32>, ImmLeaf<i32, [{return isInt<16>(Imm);}]> {
+  let DecoderMethod = "decodeSimm16";
 }
 
-def CallTargetAsmOperand : AsmOperandClass {
-  let Name = "CallTarget";
+// Unsigned 21-bit immediate
+def uimm21 : Operand<i32>, ImmLeaf<i32, [{return isUInt<21>(Imm);}]> {
+  let DecoderMethod = "decodeUimm21";
 }
+
+// Branch target operands (PC-relative)
+def BrTarget16 : Operand<OtherVT> {
+  let EncoderMethod = "getBranchTarget16OpValue";
+  let DecoderMethod = "decodeBrTarget16";
+}
+
+def BrTarget21 : Operand<OtherVT> {
+  let EncoderMethod = "getBranchTarget21OpValue";
+  let DecoderMethod = "decodeBrTarget21";
+}
+
+def BrTarget26 : Operand<OtherVT> {
+  let EncoderMethod = "getBranchTarget26OpValue";
+  let DecoderMethod = "decodeBrTarget26";
+}
+
 def CallTarget : Operand<i32> {
-  let ParserMatchClass = CallTargetAsmOperand;
-  let EncoderMethod = "getBranchTargetOpValue";
-  let DecoderMethod = "decodeBranch";
+  let EncoderMethod = "getBranchTarget21OpValue";
+  let DecoderMethod = "decodeBrTarget21";
 }
 
-def ImmShiftAsmOperand : AsmOperandClass { let Name = "ImmShift"; }
-def immShift : Operand<i32>, PatLeaf<(imm), [{
-    int Imm = N->getSExtValue();
-    return Imm >= -31 && Imm <= 31;}]> {
-  let ParserMatchClass = ImmShiftAsmOperand;
-  let DecoderMethod = "decodeShiftImm";
+// Address matching for loads/stores: base + signed 16-bit offset
+def ADDRri : ComplexPattern<i32, 2, "selectAddrRI", [frameindex]>;
+
+// SDNodeXForms for constant materialization
+def HI21 : SDNodeXForm<imm, [{
+  return CurDAG->getTargetConstant(
+    ((uint64_t)N->getZExtValue() >> 11) & 0x1FFFFF, SDLoc(N), MVT::i32);
+}]>;
+
+def LO11 : SDNodeXForm<imm, [{
+  return CurDAG->getTargetConstant(
+    (uint64_t)N->getZExtValue() & 0x7FF, SDLoc(N), MVT::i32);
+}]>;
+
+// Immediate predicates
+def immSExt16 : PatLeaf<(imm), [{return isInt<16>(N->getSExtValue());}]>;
+def immUExt21 : PatLeaf<(imm), [{return isUInt<21>(N->getZExtValue());}]>;
+
+// ===----------------------------------------------------------------------===//
+// Pseudo instructions
+// ===----------------------------------------------------------------------===//
+
+let Defs = [X31], Uses = [X31] in {
+  def ADJCALLSTACKDOWN : Pseudo<(outs), (ins i32imm:$amt, i32imm:$amt2),
+                                [(CallSeqStart timm:$amt, timm:$amt2)]>;
+  def ADJCALLSTACKUP   : Pseudo<(outs), (ins i32imm:$amt, i32imm:$amt2),
+                                [(CallSeqEnd timm:$amt, timm:$amt2)]>;
 }
 
-def Imm10AsmOperand : AsmOperandClass { let Name = "Imm10"; }
-def imm10 : Operand<i32>, PatLeaf<(imm), [{
-    return isInt<10>(N->getSExtValue()); }]> {
-  let ParserMatchClass = Imm10AsmOperand;
+// Return pseudo - expands to BR X30
+let isReturn = 1, isTerminator = 1, isBarrier = 1, Uses = [X30] in
+  def RET : Pseudo<(outs), (ins), [(ZodiacRetGlue)]>;
+
+// Call pseudo - expands to BL X30, target
+let isCall = 1, Defs = [X30], Uses = [X31] in {
+  def CALL : Pseudo<(outs), (ins CallTarget:$target),
+                    [(ZodiacCall tglobaladdr:$target)]>;
+  def CALLR : Pseudo<(outs), (ins GPR:$rs1),
+                     [(ZodiacCall GPR:$rs1)]>;
 }
 
-def LoImm16AsmOperand : AsmOperandClass { let Name = "LoImm16"; }
-def i32lo16z : Operand<i32>, PatLeaf<(i32 imm), [{
-    // i32lo16 predicate - true if the 32-bit immediate has only rightmost 16
-    // bits set.
-    return ((N->getZExtValue() & 0xFFFFUL) == N->getZExtValue());}], LO16> {
-  let ParserMatchClass = LoImm16AsmOperand;
-}
-def i32neg16 : Operand<i32>, PatLeaf<(i32 imm), [{
-    // i32neg16 predicate - true if the 32-bit immediate is negative and can
-    // be represented by a 16 bit integer.
-    int Imm = N->getSExtValue();
-    return (Imm < 0) && (isInt<16>(Imm));}], LO16> {
-  let ParserMatchClass = LoImm16AsmOperand;
-}
-def i32lo16s : Operand<i32>, PatLeaf<(i32 imm), [{
-    // i32lo16 predicate - true if the 32-bit immediate has only rightmost 16
-    // bits set.
-    return ((int64_t)(N->getSExtValue() & 0xFFFFUL) == N->getSExtValue());}], LO16> {
-  let ParserMatchClass = LoImm16AsmOperand;
-}
+// Select_CC pseudo - expanded during EmitInstrWithCustomInserter
+let usesCustomInserter = 1 in
+  def SELECT_CC : Pseudo<(outs GPR:$rd),
+                         (ins GPR:$trueval, GPR:$falseval, GPR:$lhs, GPR:$rhs, i32imm:$cc), []>;
 
-def LoImm16AndAsmOperand : AsmOperandClass { let Name = "LoImm16And"; }
-def i32lo16and : Operand<i32>, PatLeaf<(i32 imm), [{
-    // i32lo16 predicate - true if the 32-bit immediate has the rightmost 16
-    // bits set and the leftmost 16 bits 1's.
-    return (N->getZExtValue() >= 0xFFFF0000UL);}], LO16> {
-  let ParserMatchClass = LoImm16AndAsmOperand;
-  let PrintMethod = "printLo16AndImmOperand";
-}
+// ===----------------------------------------------------------------------===//
+// NOP and HLT (Z-type)
+// ===----------------------------------------------------------------------===//
 
-def HiImm16AsmOperand : AsmOperandClass { let Name = "HiImm16"; }
-def i32hi16 : Operand<i32>, PatLeaf<(i32 imm), [{
-    // i32hi16 predicate - true if the 32-bit immediate has only leftmost 16
-    // bits set.
-    return ((N->getZExtValue() & 0xFFFF0000UL) == N->getZExtValue());}], HI16> {
-  let ParserMatchClass = HiImm16AsmOperand;
-  let PrintMethod = "printHi16ImmOperand";
-}
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
+  def NOP : InstZ<0b000000, (outs), (ins), "nop", []>;
 
-def HiImm16AndAsmOperand : AsmOperandClass { let Name = "HiImm16And"; }
-def i32hi16and : Operand<i32>, PatLeaf<(i32 imm), [{
-    // i32lo16 predicate - true if the 32-bit immediate has the leftmost 16
-    // bits set and the rightmost 16 bits 1's.
-    return ((N->getZExtValue() & 0xFFFFUL) == 0xFFFFUL);}], HI16> {
-  let ParserMatchClass = HiImm16AndAsmOperand;
-  let PrintMethod = "printHi16AndImmOperand";
-}
+let hasSideEffects = 1, mayLoad = 0, mayStore = 0,
+    isTerminator = 1, isBarrier = 1 in
+  def HLT : InstZ<0b111111, (outs), (ins), "hlt", []>;
 
-def LoImm21AsmOperand : AsmOperandClass { let Name = "LoImm21"; }
-def i32lo21 : Operand<i32>, PatLeaf<(i32 imm), [{
-    // i32lo21 predicate - true if the 32-bit immediate has only rightmost 21
-    // bits set.
-    return ((N->getZExtValue() & 0x1FFFFFUL) == N->getZExtValue());}], LO21> {
-  let ParserMatchClass = LoImm21AsmOperand;
-}
+// ===----------------------------------------------------------------------===//
+// ALU instruction multiclasses
+// ===----------------------------------------------------------------------===//
 
-def AluOp : Operand<i32> {
-  let PrintMethod = "printAluOperand";
-}
+// R-type ALU: rd = rs1 op rs2
+class ALU_rr<bits<6> op, string mnemonic, SDNode OpNode>
+    : InstR<op, (outs GPR:$rd), (ins GPR:$rs1, GPR:$rs2),
+            !strconcat(mnemonic, "\t$rd, $rs1, $rs2"),
+            [(set GPR:$rd, (OpNode GPR:$rs1, GPR:$rs2))]>,
+      Sched<[WriteALU]>;
 
-// Addressing modes.
-def ADDRrr : ComplexPattern<i32, 3, "selectAddrRr", [], []>;
-def ADDRri : ComplexPattern<i32, 3, "selectAddrRi", [frameindex], []>;
-def ADDRsls : ComplexPattern<i32, 1, "selectAddrSls", [frameindex], []>;
-def ADDRspls : ComplexPattern<i32, 3, "selectAddrSpls", [frameindex], []>;
+// I-type ALU: rd = rs1 op sign_extend(imm16)
+class ALU_ri<bits<6> op, string mnemonic, SDNode OpNode>
+    : InstI<op, (outs GPR:$rd), (ins GPR:$rs1, simm16:$imm16),
+            !strconcat(mnemonic, "\t$rd, $rs1, $imm16"),
+            [(set GPR:$rd, (OpNode GPR:$rs1, simm16:$imm16))]>,
+      Sched<[WriteALU]>;
 
-// Address operands
-def MemRegImmAsmOperand : AsmOperandClass {
-  let Name = "MemRegImm";
-  let ParserMethod  = "parseMemoryOperand";
-}
-def MEMri : Operand<i32> {
-  let DecoderMethod = "decodeRiMemoryValue";
-  let EncoderMethod = "getRiMemoryOpValue";
-  let MIOperandInfo = (ops GPR:$base, i32lo16s:$offset, AluOp:$Opcode);
-  let ParserMatchClass = MemRegImmAsmOperand;
-  let PrintMethod   = "printMemRiOperand";
-}
+// I-type ALU without pattern (for SUBI which LLVM canonicalizes away)
+class ALU_ri_np<bits<6> op, string mnemonic>
+    : InstI<op, (outs GPR:$rd), (ins GPR:$rs1, simm16:$imm16),
+            !strconcat(mnemonic, "\t$rd, $rs1, $imm16"), []>,
+      Sched<[WriteALU]>;
 
-def MemRegRegAsmOperand : AsmOperandClass {
-  let Name = "MemRegReg";
-  let ParserMethod  = "parseMemoryOperand";
-}
-def MEMrr : Operand<i32> {
-  let DecoderMethod = "decodeRrMemoryValue";
-  let EncoderMethod = "getRrMemoryOpValue";
-  let MIOperandInfo = (ops GPR:$Op1, GPR:$Op2, AluOp:$Opcode);
-  let ParserMatchClass = MemRegRegAsmOperand;
-  let PrintMethod   = "printMemRrOperand";
-}
+// R-type ALU without pattern
+class ALU_rr_np<bits<6> op, string mnemonic>
+    : InstR<op, (outs GPR:$rd), (ins GPR:$rs1, GPR:$rs2),
+            !strconcat(mnemonic, "\t$rd, $rs1, $rs2"), []>,
+      Sched<[WriteALU]>;
 
-def MemImmAsmOperand : AsmOperandClass {
-  let Name = "MemImm";
-  let ParserMethod  = "parseMemoryOperand";
-}
-def MEMi : Operand<i32> {
-  let ParserMatchClass = MemImmAsmOperand;
-  let PrintMethod   = "printMemImmOperand";
-}
+// ===----------------------------------------------------------------------===//
+// Arithmetic instructions (opcodes 25-28)
+// ===----------------------------------------------------------------------===//
 
-def MemSplsAsmOperand : AsmOperandClass {
-  let Name = "MemSpls";
-  let ParserMethod  = "parseMemoryOperand";
-}
-def MEMspls : Operand<i32> {
-  let DecoderMethod = "decodeSplsValue";
-  let EncoderMethod = "getSplsOpValue";
-  let MIOperandInfo = (ops GPR:$base, imm10:$offset, AluOp:$Opcode);
-  let ParserMatchClass = MemSplsAsmOperand;
-  let PrintMethod   = "printMemSplsOperand";
-}
+def ADD  : ALU_rr<25, "add",  add>;
+def ADDI : ALU_ri<26, "addi", add>;
+def SUB  : ALU_rr<27, "sub",  sub>;
+// SUBI: rd = rs1 - sign_extend(imm16). LLVM canonicalizes (sub x, C) to
+// (add x, -C), so ADDI handles most cases. SUBI has no auto-match pattern.
+def SUBI : ALU_ri_np<28, "subi">;
 
-def CCOp : Operand<i32> {
-  let PrintMethod = "printCCOperand";
-}
+// ===----------------------------------------------------------------------===//
+// Multiply / Divide instructions (opcodes 29-36)
+// ===----------------------------------------------------------------------===//
 
-// Predicate operand. Default to 0 = true.
-def CondCodeOperand : AsmOperandClass { let Name = "CondCode"; }
+def MUL    : ALU_rr<29, "mul",    mul>;
+def MULH   : InstR<30, (outs GPR:$rd), (ins GPR:$rs1, GPR:$rs2),
+                   "mulh\t$rd, $rs1, $rs2",
+                   [(set GPR:$rd, (mulhs GPR:$rs1, GPR:$rs2))]>,
+             Sched<[WriteALU]>;
+def MULHSU : ALU_rr_np<31, "mulhsu">;
+def MULHU  : InstR<32, (outs GPR:$rd), (ins GPR:$rs1, GPR:$rs2),
+                   "mulhu\t$rd, $rs1, $rs2",
+                   [(set GPR:$rd, (mulhu GPR:$rs1, GPR:$rs2))]>,
+             Sched<[WriteALU]>;
+def DIV    : ALU_rr<33, "div",  sdiv>;
+def DIVU   : ALU_rr<34, "divu", udiv>;
+def REM    : ALU_rr<35, "rem",  srem>;
+def REMU   : ALU_rr<36, "remu", urem>;
 
-def pred : PredicateOperand<i32, (ops i32imm), (ops (i32 0))> {
-  let PrintMethod = "printPredicateOperand";
-  let ParserMatchClass = CondCodeOperand;
-  let DecoderMethod = "decodePredicateOperand";
-}
+// ===----------------------------------------------------------------------===//
+// Logical instructions (opcodes 37-42)
+// ===----------------------------------------------------------------------===//
 
-let hasSideEffects = 0, Inst = 0x00000001 in
-  def NOP : InstZodiac<(outs), (ins), "nop", []>;
+def AND  : ALU_rr<37, "and",  and>;
+def ANDI : ALU_ri<38, "andi", and>;
+def OR   : ALU_rr<39, "or",   or>;
+def ORI  : ALU_ri<40, "ori",  or>;
+def XOR  : ALU_rr<41, "xor",  xor>;
+def XORI : ALU_ri<42, "xori", xor>;
 
-// Special NOPs to change logging level in vzodiac.
-let hasSideEffects = 0, Inst = 0x00000002 in
-  def LOG0 : InstZodiac<(outs), (ins), "log_0", []>;
-let hasSideEffects = 0, Inst = 0x00000003 in
-  def LOG1 : InstZodiac<(outs), (ins), "log_1", []>;
-let hasSideEffects = 0, Inst = 0x00000004 in
-  def LOG2 : InstZodiac<(outs), (ins), "log_2", []>;
-let hasSideEffects = 0, Inst = 0x00000005 in
-  def LOG3 : InstZodiac<(outs), (ins), "log_3", []>;
-let hasSideEffects = 0, Inst = 0x00000006 in
-  def LOG4 : InstZodiac<(outs), (ins), "log_4", []>;
+// ===----------------------------------------------------------------------===//
+// Shift instructions (opcodes 43-48)
+// ===----------------------------------------------------------------------===//
 
-// Map an SPLS instruction onto itself. All other instructions will be mapped
-// onto -1. Used to identify SPLS instructions.
-def splsIdempotent : InstrMapping {
-  let FilterClass = "InstSPLS";
-  let RowFields = ["AsmString"];
-  let ColFields = ["PostEncoderMethod"];
-  let KeyCol = ["adjustPqBitsSpls"];
-  let ValueCols = [["adjustPqBitsSpls"]];
+def SLL  : ALU_rr<43, "sll",  shl>;
+def SLLI : ALU_ri<44, "slli", shl>;
+def SRL  : ALU_rr<45, "srl",  srl>;
+def SRLI : ALU_ri<46, "srli", srl>;
+def SRA  : ALU_rr<47, "sra",  sra>;
+def SRAI : ALU_ri<48, "srai", sra>;
+
+// ===----------------------------------------------------------------------===//
+// Set-less-than instructions (opcodes 21-24)
+// ===----------------------------------------------------------------------===//
+// Patterns are handled via custom lowering of ISD::SETCC
+
+def SLT   : ALU_rr_np<21, "slt">;
+def SLTU  : ALU_rr_np<22, "sltu">;
+def SLTI  : ALU_ri_np<23, "slti">;
+def SLTIU : ALU_ri_np<24, "sltiu">;
+
+// ===----------------------------------------------------------------------===//
+// Load instructions (opcodes 1-5) — I-type
+// ===----------------------------------------------------------------------===//
+
+let mayLoad = 1, hasSideEffects = 0 in {
+  def LB  : InstI<1, (outs GPR:$rd), (ins GPR:$rs1, simm16:$imm16),
+                  "lb\t$rd, ${imm16}(${rs1})", []>;
+  def LBU : InstI<2, (outs GPR:$rd), (ins GPR:$rs1, simm16:$imm16),
+                  "lbu\t$rd, ${imm16}(${rs1})", []>;
+  def LH  : InstI<3, (outs GPR:$rd), (ins GPR:$rs1, simm16:$imm16),
+                  "lh\t$rd, ${imm16}(${rs1})", []>;
+  def LHU : InstI<4, (outs GPR:$rd), (ins GPR:$rs1, simm16:$imm16),
+                  "lhu\t$rd, ${imm16}(${rs1})", []>;
+  def LW  : InstI<5, (outs GPR:$rd), (ins GPR:$rs1, simm16:$imm16),
+                  "lw\t$rd, ${imm16}(${rs1})", []>;
 }
 
-// -------------------------------------------------- //
-// ALU instructions
-// -------------------------------------------------- //
-multiclass ALUbase<bits<3> subOp, string AsmStr,
-                   PatLeaf LoExt, PatLeaf HiExt,
-                   list<dag> loPattern, list<dag> hiPattern> {
-  // Register Immediate
-  let H = 0 in
-    def LO : InstRI<subOp, (outs GPR:$Rd), (ins GPR:$Rs1, LoExt:$imm16),
-                    !strconcat(AsmStr, "\t$Rs1, $imm16, $Rd"),
-                    loPattern>;
-  let H = 1 in
-    def HI : InstRI<subOp, (outs GPR:$Rd), (ins GPR:$Rs1, HiExt:$imm16),
-                    !strconcat(AsmStr, "\t$Rs1, $imm16, $Rd"),
-                    hiPattern>;
+// ===----------------------------------------------------------------------===//
+// Store instructions (opcodes 9-11) — S-type
+// ===----------------------------------------------------------------------===//
 
+let mayStore = 1, hasSideEffects = 0 in {
+  def SB : InstS<9,  (outs), (ins GPR:$rs2, GPR:$rs1, simm16:$imm16),
+                 "sb\t$rs2, ${imm16}(${rs1})", []>;
+  def SH : InstS<10, (outs), (ins GPR:$rs2, GPR:$rs1, simm16:$imm16),
+                 "sh\t$rs2, ${imm16}(${rs1})", []>;
+  def SW : InstS<11, (outs), (ins GPR:$rs2, GPR:$rs1, simm16:$imm16),
+                 "sw\t$rs2, ${imm16}(${rs1})", []>;
 }
 
-multiclass ALUarith<bits<3> subOp, string AsmStr, SDNode OpNode,
-                    PatLeaf LoExt, PatLeaf HiExt> {
-  defm I_ : ALUbase<subOp, AsmStr, LoExt, HiExt, [], []>;
+// ===----------------------------------------------------------------------===//
+// Load / Store patterns
+// ===----------------------------------------------------------------------===//
 
-  // Register Register
-  let JJJJJ = 0 in
-    def R : InstRR<subOp, (outs GPR:$Rd), (ins GPR:$Rs1, GPR:$Rs2, pred:$DDDI),
-                   !strconcat(AsmStr, "$DDDI\t$Rs1, $Rs2, $Rd"),
-                   [(set GPR:$Rd, (OpNode GPR:$Rs1, GPR:$Rs2))]>;
+// Word load/store
+def : Pat<(load (ADDRri GPR:$base, simm16:$off)),
+          (LW GPR:$base, simm16:$off)>;
+def : Pat<(store GPR:$val, (ADDRri GPR:$base, simm16:$off)),
+          (SW GPR:$val, GPR:$base, simm16:$off)>;
+
+// Half-word loads
+def : Pat<(sextloadi16 (ADDRri GPR:$base, simm16:$off)),
+          (LH GPR:$base, simm16:$off)>;
+def : Pat<(zextloadi16 (ADDRri GPR:$base, simm16:$off)),
+          (LHU GPR:$base, simm16:$off)>;
+def : Pat<(extloadi16 (ADDRri GPR:$base, simm16:$off)),
+          (LHU GPR:$base, simm16:$off)>;
+
+// Byte loads
+def : Pat<(sextloadi8 (ADDRri GPR:$base, simm16:$off)),
+          (LB GPR:$base, simm16:$off)>;
+def : Pat<(zextloadi8 (ADDRri GPR:$base, simm16:$off)),
+          (LBU GPR:$base, simm16:$off)>;
+def : Pat<(extloadi8 (ADDRri GPR:$base, simm16:$off)),
+          (LBU GPR:$base, simm16:$off)>;
+
+// Truncating stores
+def : Pat<(truncstorei16 GPR:$val, (ADDRri GPR:$base, simm16:$off)),
+          (SH GPR:$val, GPR:$base, simm16:$off)>;
+def : Pat<(truncstorei8 GPR:$val, (ADDRri GPR:$base, simm16:$off)),
+          (SB GPR:$val, GPR:$base, simm16:$off)>;
+
+// ===----------------------------------------------------------------------===//
+// Upper-immediate instructions (opcodes 6-8) — U-type
+// ===----------------------------------------------------------------------===//
+
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in {
+  def LI    : InstU<6, (outs GPR:$rd), (ins uimm21:$imm21),
+                    "li\t$rd, $imm21", []>;
+  def LUI   : InstU<7, (outs GPR:$rd), (ins uimm21:$imm21),
+                    "lui\t$rd, $imm21", []>;
+  def AUIPC : InstU<8, (outs GPR:$rd), (ins uimm21:$imm21),
+                    "auipc\t$rd, $imm21", []>;
 }
 
-multiclass ALUlogic<bits<3> subOp, string AsmStr, SDNode OpNode,
-                    PatLeaf LoExt, PatLeaf HiExt> {
-  defm I_ : ALUbase<subOp, AsmStr, LoExt, HiExt,
-                    [(set GPR:$Rd, (OpNode GPR:$Rs1, LoExt:$imm16))],
-                    [(set GPR:$Rd, (OpNode GPR:$Rs1, HiExt:$imm16))]>;
+// ===----------------------------------------------------------------------===//
+// Constant materialization patterns
+// ===----------------------------------------------------------------------===//
 
-  // Register Register
-  let JJJJJ = 0 in
-    def R : InstRR<subOp, (outs GPR:$Rd), (ins GPR:$Rs1, GPR:$Rs2, pred:$DDDI),
-                   !strconcat(AsmStr, "$DDDI\t$Rs1, $Rs2, $Rd"),
-                   [(set GPR:$Rd, (OpNode GPR:$Rs1, GPR:$Rs2))]>;
+// Small signed constants [-32768, 32767]: ADDI x0, imm
+let AddedComplexity = 3 in
+def : Pat<(i32 immSExt16:$imm), (ADDI X0, simm16:$imm)>;
+
+// Unsigned 21-bit constants [0, 2097151]: LI
+let AddedComplexity = 2 in
+def : Pat<(i32 immUExt21:$imm), (LI uimm21:$imm)>;
+
+// General 32-bit constants: LUI + ORI
+def : Pat<(i32 imm:$imm), (ORI (LUI (HI21 imm:$imm)), (LO11 imm:$imm))>;
+
+// Global address materialization
+def : Pat<(ZodiacHi21 tglobaladdr:$addr), (LUI tglobaladdr:$addr)>;
+def : Pat<(ZodiacLo11 tglobaladdr:$addr), (ORI X0, tglobaladdr:$addr)>;
+def : Pat<(ZodiacHi21 tblockaddress:$addr), (LUI tblockaddress:$addr)>;
+def : Pat<(ZodiacLo11 tblockaddress:$addr), (ORI X0, tblockaddress:$addr)>;
+
+// ===----------------------------------------------------------------------===//
+// Branch instructions (opcodes 12-20)
+// ===----------------------------------------------------------------------===//
+
+// Unconditional absolute branch
+let isBranch = 1, isTerminator = 1, isBarrier = 1 in
+  def B : InstJ26<12, (outs), (ins BrTarget26:$imm26),
+                  "b\t$imm26", [(br bb:$imm26)]>;
+
+// Branch register (indirect jump)
+let isBranch = 1, isTerminator = 1, isBarrier = 1, isIndirectBranch = 1 in
+  def BR : InstBR<13, (outs), (ins GPR:$rs1),
+                  "br\t$rs1", [(brind GPR:$rs1)]>;
+
+// Branch and link (function call instruction)
+let isCall = 1 in
+  def BL : InstJ<14, (outs GPR:$rd), (ins BrTarget21:$imm21),
+                 "bl\t$rd, $imm21", []>;
+
+// Conditional branches — patterns handled by custom lowering of BR_CC
+let isBranch = 1, isTerminator = 1 in {
+  def BEQ  : InstB<15, (outs), (ins GPR:$rs1, GPR:$rs2, BrTarget16:$imm16),
+                   "beq\t$rs1, $rs2, $imm16", []>;
+  def BNE  : InstB<16, (outs), (ins GPR:$rs1, GPR:$rs2, BrTarget16:$imm16),
+                   "bne\t$rs1, $rs2, $imm16", []>;
+  def BLT  : InstB<17, (outs), (ins GPR:$rs1, GPR:$rs2, BrTarget16:$imm16),
+                   "blt\t$rs1, $rs2, $imm16", []>;
+  def BLTU : InstB<18, (outs), (ins GPR:$rs1, GPR:$rs2, BrTarget16:$imm16),
+                   "bltu\t$rs1, $rs2, $imm16", []>;
+  def BGE  : InstB<19, (outs), (ins GPR:$rs1, GPR:$rs2, BrTarget16:$imm16),
+                   "bge\t$rs1, $rs2, $imm16", []>;
+  def BGEU : InstB<20, (outs), (ins GPR:$rs1, GPR:$rs2, BrTarget16:$imm16),
+                   "bgeu\t$rs1, $rs2, $imm16", []>;
 }
 
-// Non flag setting ALU operations
-let isAsCheapAsAMove = 1, F = 0 in {
-  let isCommutable = 1 in {
-    defm ADD_ : ALUarith<0b000, "add", add, i32lo16z, i32hi16>;
-  }
-  defm SUB_ : ALUarith<0b010,   "sub", sub, i32lo16z, i32hi16>;
-  let isCommutable = 1 in {
-    defm AND_ : ALUlogic<0b100, "and", and, i32lo16and, i32hi16and>;
-    defm OR_  : ALUlogic<0b101,  "or",  or, i32lo16z, i32hi16>;
-    defm XOR_ : ALUlogic<0b110, "xor", xor, i32lo16z, i32hi16>;
-  }
-}
-
-def : Pat<(add GPR:$Rs1, i32lo16z:$imm),
-          (ADD_I_LO GPR:$Rs1, i32lo16z:$imm)>;
-
-def : Pat<(sub GPR:$Rs1, i32lo16z:$imm),
-          (SUB_I_LO GPR:$Rs1, i32lo16z:$imm)>;
-
-def : Pat<(add GPR:$Rs1, i32hi16:$imm),
-          (ADD_I_HI GPR:$Rs1, i32hi16:$imm)>;
-
-def : Pat<(sub GPR:$Rs1, i32hi16:$imm),
-          (SUB_I_HI GPR:$Rs1, i32hi16:$imm)>;
-
-def : Pat<(i32 i32lo16and:$imm), (AND_I_LO (i32 R1), i32lo16and:$imm)>;
-def : Pat<(i32 i32hi16and:$imm), (AND_I_HI (i32 R1), i32hi16and:$imm)>;
-
-// Change add/sub with negative number to sub/add
-def : Pat<(add GPR:$Rs1, i32neg16:$imm),
-          (SUB_I_LO GPR:$Rs1, (NEG $imm))>;
-def : Pat<(sub GPR:$Rs1, i32neg16:$imm),
-          (ADD_I_LO GPR:$Rs1, (NEG $imm))>;
-
-// Flag (incl. carry) setting addition and subtraction
-let F = 1, Defs = [SR] in {
-  defm ADD_F_ : ALUarith<0b000, "add.f", addc, i32lo16z, i32hi16>;
-  defm SUB_F_ : ALUarith<0b010, "sub.f", subc, i32lo16z, i32hi16>;
-}
-
-def : Pat<(addc GPR:$Rs1, i32lo16z:$imm),
-          (ADD_F_I_LO GPR:$Rs1, i32lo16z:$imm)>;
-
-def : Pat<(subc GPR:$Rs1, i32lo16z:$imm),
-          (SUB_F_I_LO GPR:$Rs1, i32lo16z:$imm)>;
-
-def : Pat<(addc GPR:$Rs1, i32hi16:$imm),
-          (ADD_F_I_HI GPR:$Rs1, i32hi16:$imm)>;
-
-def : Pat<(subc GPR:$Rs1, i32hi16:$imm),
-          (SUB_F_I_HI GPR:$Rs1, i32hi16:$imm)>;
-
-// Carry using addition and subtraction
-let F = 0, Uses = [SR] in {
-  defm ADDC_ : ALUarith<0b001, "addc", adde, i32lo16z, i32hi16>;
-  defm SUBB_ : ALUarith<0b011, "subb", sube, i32lo16z, i32hi16>;
-}
-
-def : Pat<(adde GPR:$Rs1, i32lo16z:$imm),
-          (ADDC_I_LO GPR:$Rs1, i32lo16z:$imm)>;
-
-def : Pat<(sube GPR:$Rs1, i32lo16z:$imm),
-          (SUBB_I_LO GPR:$Rs1, i32lo16z:$imm)>;
-
-def : Pat<(adde GPR:$Rs1, i32hi16:$imm),
-          (ADDC_I_HI GPR:$Rs1, i32hi16:$imm)>;
-
-def : Pat<(sube GPR:$Rs1, i32hi16:$imm),
-          (SUBB_I_HI GPR:$Rs1, i32hi16:$imm)>;
-
-// Flag setting ALU operations
-let isAsCheapAsAMove = 1, F = 1, Defs = [SR] in {
-  let isCommutable = 1 in {
-    defm AND_F_ : ALUlogic<0b100, "and.f",  and, i32lo16and, i32hi16and>;
-    defm OR_F_  : ALUlogic<0b101,  "or.f",   or, i32lo16z, i32hi16>;
-    defm XOR_F_ : ALUlogic<0b110, "xor.f",  xor, i32lo16z, i32hi16>;
-  }
-}
-
-let isAsCheapAsAMove = 1, F = 1, Defs = [SR], Uses = [SR] in {
-  defm ADDC_F_ : ALUarith<0b001, "addc.f", adde, i32lo16z, i32hi16>;
-  defm SUBB_F_ : ALUarith<0b011, "subb.f", sube, i32lo16z, i32hi16>;
-}
-
-def : Pat<(ZodiacSubbF GPR:$Rs1, GPR:$Rs2),
-          (SUBB_F_R GPR:$Rs1, GPR:$Rs2)>;
-
-def : Pat<(ZodiacSubbF GPR:$Rs1, i32lo16z:$imm),
-          (SUBB_F_I_LO GPR:$Rs1, i32lo16z:$imm)>;
-
-def : Pat<(ZodiacSubbF GPR:$Rs1, i32hi16:$imm),
-          (SUBB_F_I_HI GPR:$Rs1, i32hi16:$imm)>;
-
-def : InstAlias<"mov $src, $dst", (ADD_R GPR:$dst, GPR:$src, R0, (pred 0))>;
-
-let isAsCheapAsAMove = 1, Rs1 = R0.Num, isCodeGenOnly = 1, H = 1, F = 0,
-  isReMaterializable = 1 in
-  def MOVHI : InstRI<0b000, (outs GPR:$Rd), (ins i32hi16:$imm16),
-                     "mov\t$imm16, $Rd",
-                     [(set GPR:$Rd, i32hi16:$imm16)]>;
-
-def : InstAlias<"mov $imm16, $dst", (ADD_I_LO GPR:$dst, R0, i32lo16z:$imm16)>;
-def : InstAlias<"mov $imm16, $dst", (ADD_I_HI GPR:$dst, R0, i32hi16:$imm16)>;
-def : InstAlias<"mov $imm16, $dst",
-                (AND_I_LO GPR:$dst, R1, i32lo16and:$imm16)>;
-def : InstAlias<"mov $imm16, $dst",
-                (AND_I_HI GPR:$dst, R1, i32hi16and:$imm16)>;
-
-// Shift instructions
-class ShiftRI<string AsmStr, list<dag> Pattern>
-  : InstRI<0b111, (outs GPR:$Rd), (ins GPR:$Rs1, immShift:$imm16),
-           !strconcat(AsmStr, "\t$Rs1, $imm16, $Rd"), Pattern> {
-  let isReMaterializable = 1;
-}
-
-let F = 0 in {
-  let H = 0 in
-    def SL_I : ShiftRI<"sh", [(set GPR:$Rd, (shl GPR:$Rs1, immShift:$imm16))]>;
-  let H = 1 in
-    def SA_I : ShiftRI<"sha", []>;
-}
-def : Pat<(srl GPR:$Rs1, immShift:$imm), (SL_I GPR:$Rs1, (NEG $imm))>;
-def : Pat<(sra GPR:$Rs1, immShift:$imm), (SA_I GPR:$Rs1, (NEG $imm))>;
-
-let F = 1, Defs = [SR] in {
-  let H = 0 in
-    def SL_F_I : ShiftRI<"sh.f", []>;
-  let H = 1 in
-    def SA_F_I : ShiftRI<"sha.f", []>;
-}
-
-class ShiftRR<string AsmStr, list<dag> Pattern>
-  : InstRR<0b111, (outs GPR:$Rd), (ins GPR:$Rs1, GPR:$Rs2, pred:$DDDI), AsmStr,
-           Pattern>;
-
-let F = 0 in {
-  let JJJJJ = 0b10000 in
-    def SHL_R : ShiftRR<"sh$DDDI\t$Rs1, $Rs2, $Rd",
-                        [(set GPR:$Rd, (shl GPR:$Rs1, GPR:$Rs2))]>;
-  let isCodeGenOnly = 1 in {
-    let JJJJJ = 0b10000 in
-      def SRL_R : ShiftRR<"sh$DDDI\t$Rs1, $Rs2, $Rd", []>;
-  }
-  let JJJJJ = 0b11000 in
-    def SRA_R : ShiftRR<"sha$DDDI\t$Rs1, $Rs2, $Rd", []>;
-}
-
-let F = 1, Defs = [SR] in {
-  let JJJJJ = 0b10000 in
-    def SHL_F_R : ShiftRR<"sh.f$DDDI\t$Rs1, $Rs2, $Rd", []>;
-  let isCodeGenOnly = 1 in {
-    let JJJJJ = 0b10000 in
-      def SRL_F_R : ShiftRR<"sh.f$DDDI\t$Rs1, $Rs2, $Rd", []>;
-  }
-  let JJJJJ = 0b11000 in
-    def SRA_F_R : ShiftRR<"sha.f$DDDI\t$Rs1, $Rs2, $Rd", []>;
-}
-
-// Expand shift-right operations
-def : Pat<(srl GPR:$Rs1, GPR:$Rs2),
-          (SRL_R GPR:$Rs1, (SUB_R R0, GPR:$Rs2))>;
-def : Pat<(sra GPR:$Rs1, GPR:$Rs2),
-          (SRA_R GPR:$Rs1, (SUB_R R0, GPR:$Rs2))>;
-
-// -------------------------------------------------- //
-// LOAD instructions
-// -------------------------------------------------- //
-
-class LoadRR<string OpcString, PatFrag OpNode, ValueType Ty>
-  : InstRRM<0b0, (outs GPR:$Rd), (ins MEMrr:$src),
-            !strconcat(OpcString, "\t$src, $Rd"),
-            [(set (Ty GPR:$Rd), (OpNode ADDRrr:$src))]>,
-    Sched<[WriteLD]> {
-  bits<20> src;
-
-  let Rs1 = src{19-15};
-  let Rs2 = src{14-10};
-  let P = src{9};
-  let Q = src{8};
-  let BBB = src{7-5};
-  let JJJJJ = src{4-0};
-  let mayLoad = 1;
-}
-
-class LoadRI<string OpcString, PatFrag OpNode, ValueType Ty>
-  : InstRM<0b0, (outs GPR:$Rd), (ins MEMri:$src),
-           !strconcat(OpcString, "\t$src, $Rd"),
-           [(set (Ty GPR:$Rd), (OpNode ADDRri:$src))]>,
-    Sched<[WriteLD]> {
-  bits<23> src;
-
-  let Itinerary = IIC_LD;
-  let Rs1 = src{22-18};
-  let P = src{17};
-  let Q = src{16};
-  let imm16 = src{15-0};
-  let isReMaterializable = 1;
-  let mayLoad = 1;
-}
-
-let E = 0 in {
-  let YL = 0b01 in {
-    // uld is used here and ld in the alias as the alias is printed out first if
-    // an alias exist
-    def LDW_RI : LoadRI<"uld", load, i32>;
-    def LDW_RR : LoadRR<"ld", load, i32>;
-  }
-}
-
-def : InstAlias<"ld $src, $dst", (LDW_RI GPR:$dst, MEMri:$src)>;
-
-let E = 1 in {
-  let YL = 0b01 in {
-    def LDWz_RR : LoadRR<"uld", zextloadi32, i32>;
-  }
-}
-
-let E = 1 in {
-  let YL = 0b00 in
-    def LDHz_RR : LoadRR<"uld.h", zextloadi16, i32>;
-  let YL = 0b10 in
-    def LDBz_RR : LoadRR<"uld.b", zextloadi8, i32>;
-}
-
-let E = 0 in {
-  let YL = 0b00 in
-    def LDHs_RR : LoadRR<"ld.h", sextloadi16, i32>;
-  let YL = 0b10 in
-    def LDBs_RR : LoadRR<"ld.b", sextloadi8, i32>;
-}
-
-def LDADDR : InstSLS<0x0, (outs GPR:$Rd), (ins MEMi:$src),
-                     "ld\t$src, $Rd",
-                     [(set (i32 GPR:$Rd), (load ADDRsls:$src))]>,
-    Sched<[WriteLD]> {
-  bits<21> src;
-
-  let Itinerary = IIC_LD;
-  let msb = src{20-16};
-  let lsb = src{15-0};
-  let isReMaterializable = 1;
-  let mayLoad = 1;
-}
-
-class LoadSPLS<string asmstring, PatFrag opNode>
-  : InstSPLS<(outs GPR:$Rd), (ins MEMspls:$src),
-             !strconcat(asmstring, "\t$src, $Rd"),
-             [(set (i32 GPR:$Rd), (opNode ADDRspls:$src))]>,
-    Sched<[WriteLDSW]> {
-  bits<17> src;
-  let Itinerary = IIC_LDSW;
-  let Rs1 = src{16-12};
-  let P = src{11};
-  let Q = src{10};
-  let imm10 = src{9-0};
-  let mayLoad = 1;
-  let isReMaterializable = 1;
-}
-
-let Y = 0, S = 0, E = 1 in
-  def LDHz_RI : LoadSPLS<"uld.h", zextloadi16>;
-
-let Y = 0, S = 0, E = 0 in
-  def LDHs_RI : LoadSPLS<"ld.h", sextloadi16>;
-
-let Y = 1, S = 0, E = 1 in
-  def LDBz_RI : LoadSPLS<"uld.b", zextloadi8>;
-
-let Y = 1, S = 0, E = 0 in
-  def LDBs_RI : LoadSPLS<"ld.b", sextloadi8>;
-
-def SLI : InstSLI<(outs GPR:$Rd), (ins i32lo21:$imm),
-                  "mov\t$imm, $Rd",
-                  [(set GPR:$Rd, i32lo21:$imm)]> {
-  bits<21> imm;
-
-  let msb = imm{20-16};
-  let lsb = imm{15-0};
-  let isReMaterializable = 1;
-  let isAsCheapAsAMove = 1;
-}
-
-// -------------------------------------------------- //
-// STORE instructions
-// -------------------------------------------------- //
-
-class StoreRR<string OpcString, PatFrag OpNode, ValueType Ty>
-  : InstRRM<0b1, (outs), (ins GPR:$Rd, MEMrr:$dst),
-            !strconcat(OpcString, "\t$Rd, $dst"),
-            [(OpNode (Ty GPR:$Rd), ADDRrr:$dst)]>,
-    Sched<[WriteST]> {
-  bits<20> dst;
-
-  let Itinerary = IIC_ST;
-  let Rs1 = dst{19-15};
-  let Rs2 = dst{14-10};
-  let P = dst{9};
-  let Q = dst{8};
-  let BBB = dst{7-5};
-  let JJJJJ = dst{4-0};
-  let mayStore = 1;
-}
-
-class StoreRI<string OpcString, PatFrag OpNode, ValueType Ty>
-  : InstRM<0b1, (outs), (ins GPR:$Rd, MEMri:$dst),
-           !strconcat(OpcString, "\t$Rd, $dst"),
-           [(OpNode (Ty GPR:$Rd), ADDRri:$dst)]>,
-    Sched<[WriteST]> {
-  bits<23> dst;
-
-  let Itinerary = IIC_ST;
-  let Rs1 = dst{22-18};
-  let P = dst{17};
-  let Q = dst{16};
-  let imm16 = dst{15-0};
-  let mayStore = 1;
-}
-
-let YL = 0b01, E = 0 in {
-  def SW_RR : StoreRR<"st", store, i32>;
-  def SW_RI : StoreRI<"st", store, i32>;
-}
-
-let E = 0 in {
-  let YL = 0b00 in
-    def STH_RR : StoreRR<"st.h", truncstorei16, i32>;
-  let YL = 0b10 in
-    def STB_RR : StoreRR<"st.b", truncstorei8, i32>;
-}
-
-def STADDR : InstSLS<0x1, (outs), (ins GPR:$Rd, MEMi:$dst),
-                     "st\t$Rd, $dst",
-                     [(store (i32 GPR:$Rd), ADDRsls:$dst)]>,
-    Sched<[WriteST]> {
-  bits<21> dst;
-
-  let Itinerary = IIC_ST;
-  let msb = dst{20-16};
-  let lsb = dst{15-0};
-  let mayStore = 1;
-}
-
-class StoreSPLS<string asmstring, PatFrag opNode>
-  : InstSPLS<(outs), (ins GPR:$Rd, MEMspls:$dst),
-             !strconcat(asmstring, "\t$Rd, $dst"),
-             [(opNode (i32 GPR:$Rd), ADDRspls:$dst)]>,
-    Sched<[WriteSTSW]> {
-  bits<17> dst;
-
-  let Itinerary = IIC_STSW;
-  let Rs1 = dst{16-12};
-  let P = dst{11};
-  let Q = dst{10};
-  let imm10 = dst{9-0};
-  let mayStore = 1;
-}
-
-let Y = 0, S = 1, E = 0 in
-  def STH_RI : StoreSPLS<"st.h", truncstorei16>;
-
-let Y = 1, S = 1, E = 0 in
-  def STB_RI : StoreSPLS<"st.b", truncstorei8>;
-
-// -------------------------------------------------- //
-// BRANCH instructions
-// -------------------------------------------------- //
-
-let isBranch = 1, isBarrier = 1, isTerminator = 1, hasDelaySlot = 1 in {
-  def BT : InstBR<(outs), (ins BrTarget:$addr),
-                  "bt\t$addr",
-                  [(br bb:$addr)]> {
-    let DDDI = 0b0000;
-  }
-  let Uses = [SR] in
-    def BRCC : InstBR<(outs), (ins BrTarget:$addr, CCOp:$DDDI),
-                      "b$DDDI\t$addr",
-                      [(ZodiacBrCC bb:$addr, imm:$DDDI)]>;
-
-  let isIndirectBranch = 1 in {
-    def JR : InstRR<0b101, (outs), (ins GPR:$Rs2), "bt\t$Rs2",
-                    [(brind GPR:$Rs2)]> {
-      let Rs1 = R0.Num;
-      let Rd = R2.Num;
-      let F = 0;
-      let JJJJJ = 0;
-      let DDDI = 0;
-    }
-  }
-}
-
-// -------------------------------------------------- //
-// Condition/SF instructions
-// -------------------------------------------------- //
-
-// Instructions to set flags used in lowering comparisons.
-multiclass SF<bits<3> op2Val, string AsmStr> {
-  let F = 1, Rd = R0.Num, JJJJJ = 0, Defs = [SR], DDDI = 0 in
-    def _RR : InstRR<op2Val, (outs), (ins GPR:$Rs1, GPR:$Rs2),
-                     !strconcat(AsmStr, "\t$Rs1, $Rs2, %r0"),
-                     [(ZodiacSetFlag (i32 GPR:$Rs1), (i32 GPR:$Rs2))]>;
-  let F = 1, Rd = R0.Num, H = 0, Defs = [SR] in
-    def _RI_LO : InstRI<op2Val, (outs), (ins GPR:$Rs1, i32lo16z:$imm16),
-                     !strconcat(AsmStr, "\t$Rs1, $imm16, %r0"),
-                     [(ZodiacSetFlag (i32 GPR:$Rs1), i32lo16z:$imm16)]>;
-  let F = 1, Rd = R0.Num, H = 1, Defs = [SR] in
-    def _RI_HI : InstRI<op2Val, (outs), (ins GPR:$Rs1, i32hi16:$imm16),
-                     !strconcat(AsmStr, "\t$Rs1, $imm16, %r0"),
-                     [(ZodiacSetFlag (i32 GPR:$Rs1), i32hi16:$imm16)]>;
-}
-let isCodeGenOnly = 1, isCompare = 1 in {
-  defm SFSUB_F : SF<0b010, "sub.f">;
-}
-
-// Jump and link
-let isCall = 1, hasDelaySlot = 1, isCodeGenOnly = 1, Uses = [SP],
-    Defs = [RCA] in {
-  def CALL : Pseudo<(outs), (ins CallTarget:$addr), "", []>;
-  def CALLR : Pseudo<(outs), (ins GPR:$Rs1), "", [(Call GPR:$Rs1)]>;
-}
-
-let isReturn = 1, isTerminator = 1, hasDelaySlot = 1, isBarrier = 1,
-    Uses = [RCA] in {
-  def RET : InstRM<0b0, (outs), (ins),
-                   "ld\t-4[%fp], %pc ! return",
-                   [(RetGlue)]> {
-    let Rd = PC.Num;
-    let Rs1 = FP.Num;
-    let P = 1;
-    let Q = 0;
-    let imm16 = -4;
-
-    // Post encoding is not needed for RET.
-    let PostEncoderMethod = "";
-  }
-}
-
-// ADJCALLSTACKDOWN/UP implicitly use/def SP because they may be expanded into
-// a stack adjustment and the codegen must know that they may modify the stack
-// pointer before prolog-epilog rewriting occurs.
-// Pessimistically assume ADJCALLSTACKDOWN / ADJCALLSTACKUP will become
-// sub / add which can clobber SP.
-let Defs = [SP], Uses = [SP] in {
-  def ADJCALLSTACKDOWN : Pseudo<(outs), (ins i32imm:$amt1, i32imm:$amt2),
-                                "#ADJCALLSTACKDOWN $amt1 $amt2",
-                                [(CallSeqStart timm:$amt1, timm:$amt2)]>;
-  def ADJCALLSTACKUP   : Pseudo<(outs), (ins i32imm:$amt1, i32imm:$amt2),
-                                "#ADJCALLSTACKUP $amt1 $amt2",
-                                [(CallSeqEnd timm:$amt1, timm:$amt2)]>;
-}
-
-let Defs = [SP], Uses = [SP] in {
-  def ADJDYNALLOC : Pseudo<(outs GPR:$dst), (ins GPR:$src),
-                           "#ADJDYNALLOC $dst $src",
-                           [(set GPR:$dst, (ZodiacAdjDynAlloc GPR:$src))]>;
-}
-
-let Uses = [SR] in {
-  def SCC : InstSCC<(outs GPR:$Rs1), (ins CCOp:$DDDI),
-                    "s$DDDI\t$Rs1",
-                    [(set (i32 GPR:$Rs1), (ZodiacSetCC imm:$DDDI))]>;
-}
-
-// Select with hardware support
-let Uses = [SR], isSelect = 1 in {
-  def SELECT : InstRR<0b111, (outs GPR:$Rd),
-                      (ins GPR:$Rs1, GPR:$Rs2, CCOp:$DDDI),
-                      "sel.$DDDI $Rs1, $Rs2, $Rd",
-                      [(set (i32 GPR:$Rd),
-                       (ZodiacSelectCC (i32 GPR:$Rs1), (i32 GPR:$Rs2),
-                                      (imm:$DDDI)))]> {
-    let JJJJJ = 0;
-    let F = 0;
-  }
-}
-
-let isBranch = 1, isBarrier = 1, isTerminator = 1, hasDelaySlot = 1,
-    isIndirectBranch = 1, Uses = [SR] in {
-  def BRIND_CC : InstRR<0b101, (outs), (ins GPR:$Rs1, CCOp:$DDDI),
-                        "b$DDDI\t$Rs1", []> {
-    let F = 0;
-    let JJJJJ = 0;
-    let Rd = PC.Num;
-    let Rs2 = R0.Num;
-  }
-
-  def BRIND_CCA : InstRR<0b101, (outs), (ins GPR:$Rs1, GPR:$Rs2, CCOp:$DDDI),
-                         "b${DDDI}\t$Rs1 add $Rs2", []> {
-    let F = 0;
-    let Rd = PC.Num;
-    let JJJJJ = 0;
-  }
-}
-
-// TODO: This only considers the case where BROFF is an immediate and not where
-// it is a register. Add support for register relative branching.
-let isBranch = 1, isBarrier = 1, isTerminator = 1, hasDelaySlot = 1, Rs1 = 0,
-    Uses = [SR] in
-  def BRR : InstBRR<(outs), (ins i16imm:$imm16, CCOp:$DDDI),
-                    "b${DDDI}.r\t$imm16", []>;
-
-let F = 0 in {
-// Population Count (POPC)
-def POPC: InstSpecial<0b001, (outs GPR:$Rd), (ins GPR:$Rs1),
-                      "popc\t$Rs1, $Rd",
-                      [(set GPR:$Rd, (ctpop GPR:$Rs1))]>;
-
-// Count Leading Zeros (LEADZ)
-def LEADZ: InstSpecial<0b010, (outs GPR:$Rd), (ins GPR:$Rs1),
-                       "leadz\t$Rs1, $Rd", [(set GPR:$Rd, (ctlz GPR:$Rs1))]>;
-
-// Count Trailing Zeros (TRAILZ)
-def TRAILZ : InstSpecial<0b011, (outs GPR:$Rd), (ins GPR:$Rs1),
-                         "trailz\t$Rs1, $Rd",
-                         [(set GPR:$Rd, (cttz GPR:$Rs1))]>;
-}
-
-//===----------------------------------------------------------------------===//
-// Non-Instruction Patterns
-//===----------------------------------------------------------------------===//
-
-// unsigned 16-bit immediate
-def : Pat<(i32 i32lo16z:$imm), (OR_I_LO (i32 R0), imm:$imm)>;
-
-// arbitrary immediate
-def : Pat<(i32 imm:$imm), (OR_I_LO (MOVHI (HI16 imm:$imm)), (LO16 imm:$imm))>;
-
-// Calls
-def : Pat<(Call tglobaladdr:$dst), (CALL tglobaladdr:$dst)>;
-def : Pat<(Call texternalsym:$dst), (CALL texternalsym:$dst)>;
-
-// Loads
-def : Pat<(extloadi8  ADDRspls:$src), (i32 (LDBz_RI ADDRspls:$src))>;
-def : Pat<(extloadi16 ADDRspls:$src), (i32 (LDHz_RI ADDRspls:$src))>;
-// Loads up to 32-bits are already atomic.
-// TODO: This is a workaround for a particular failing case and should be
-// handled more generally.
-def : Pat<(atomic_load_azext_8  ADDRspls:$src), (i32 (LDBz_RI ADDRspls:$src))>;
-
-// GlobalAddress, ExternalSymbol, Jumptable, ConstantPool
-def : Pat<(ZodiacHi tglobaladdr:$dst), (MOVHI tglobaladdr:$dst)>;
-def : Pat<(ZodiacLo tglobaladdr:$dst), (OR_I_LO (i32 R0), tglobaladdr:$dst)>;
-def : Pat<(ZodiacSmall tglobaladdr:$dst), (SLI tglobaladdr:$dst)>;
-def : Pat<(ZodiacHi texternalsym:$dst), (MOVHI texternalsym:$dst)>;
-def : Pat<(ZodiacLo texternalsym:$dst), (OR_I_LO (i32 R0), texternalsym:$dst)>;
-def : Pat<(ZodiacSmall texternalsym:$dst), (SLI texternalsym:$dst)>;
-def : Pat<(ZodiacHi tblockaddress:$dst), (MOVHI tblockaddress:$dst)>;
-def : Pat<(ZodiacLo tblockaddress:$dst), (OR_I_LO (i32 R0), tblockaddress:$dst)>;
-def : Pat<(ZodiacSmall tblockaddress:$dst), (SLI tblockaddress:$dst)>;
-def : Pat<(ZodiacHi tjumptable:$dst), (MOVHI tjumptable:$dst)>;
-def : Pat<(ZodiacLo tjumptable:$dst), (OR_I_LO (i32 R0), tjumptable:$dst)>;
-def : Pat<(ZodiacSmall tjumptable:$dst), (SLI tjumptable:$dst)>;
-def : Pat<(ZodiacHi tconstpool:$dst), (MOVHI tconstpool:$dst)>;
-def : Pat<(ZodiacLo tconstpool:$dst), (OR_I_LO (i32 R0), tconstpool:$dst)>;
-def : Pat<(ZodiacSmall tconstpool:$dst), (SLI tconstpool:$dst)>;
-
-def : Pat<(or GPR:$hi, (ZodiacLo tglobaladdr:$lo)),
-          (OR_I_LO GPR:$hi, tglobaladdr:$lo)>;
-def : Pat<(or R0, (ZodiacSmall tglobaladdr:$small)),
-          (SLI tglobaladdr:$small)>;
-def : Pat<(or GPR:$hi, (ZodiacLo texternalsym:$lo)),
-          (OR_I_LO GPR:$hi, texternalsym:$lo)>;
-def : Pat<(or R0, (ZodiacSmall texternalsym:$small)),
-          (SLI texternalsym:$small)>;
-def : Pat<(or GPR:$hi, (ZodiacLo tblockaddress:$lo)),
-          (OR_I_LO GPR:$hi, tblockaddress:$lo)>;
-def : Pat<(or R0, (ZodiacSmall tblockaddress:$small)),
-          (SLI tblockaddress:$small)>;
-def : Pat<(or GPR:$hi, (ZodiacLo tjumptable:$lo)),
-          (OR_I_LO GPR:$hi, tjumptable:$lo)>;
-def : Pat<(or R0, (ZodiacSmall tjumptable:$small)),
-          (SLI tjumptable:$small)>;
-def : Pat<(or GPR:$hi, (ZodiacLo tconstpool:$lo)),
-          (OR_I_LO GPR:$hi, tconstpool:$lo)>;
-def : Pat<(or R0, (ZodiacSmall tconstpool:$small)),
-          (SLI tconstpool:$small)>;
+// Patterns for conditional branches
+def : Pat<(ZodiacBrCC SETEQ, GPR:$rs1, GPR:$rs2, bb:$imm16),
+          (BEQ GPR:$rs1, GPR:$rs2, bb:$imm16)>;
+def : Pat<(ZodiacBrCC SETNE, GPR:$rs1, GPR:$rs2, bb:$imm16),
+          (BNE GPR:$rs1, GPR:$rs2, bb:$imm16)>;
+def : Pat<(ZodiacBrCC SETLT, GPR:$rs1, GPR:$rs2, bb:$imm16),
+          (BLT GPR:$rs1, GPR:$rs2, bb:$imm16)>;
+def : Pat<(ZodiacBrCC SETULT, GPR:$rs1, GPR:$rs2, bb:$imm16),
+          (BLTU GPR:$rs1, GPR:$rs2, bb:$imm16)>;
+def : Pat<(ZodiacBrCC SETGE, GPR:$rs1, GPR:$rs2, bb:$imm16),
+          (BGE GPR:$rs1, GPR:$rs2, bb:$imm16)>;
+def : Pat<(ZodiacBrCC SETUGE, GPR:$rs1, GPR:$rs2, bb:$imm16),
+          (BGEU GPR:$rs1, GPR:$rs2, bb:$imm16)>;
+
+// Swapped operand patterns for conditions not directly supported by hardware
+def : Pat<(ZodiacBrCC SETGT, GPR:$rs1, GPR:$rs2, bb:$imm16),
+          (BLT GPR:$rs2, GPR:$rs1, bb:$imm16)>;
+def : Pat<(ZodiacBrCC SETUGT, GPR:$rs1, GPR:$rs2, bb:$imm16),
+          (BLTU GPR:$rs2, GPR:$rs1, bb:$imm16)>;
+def : Pat<(ZodiacBrCC SETLE, GPR:$rs1, GPR:$rs2, bb:$imm16),
+          (BGE GPR:$rs2, GPR:$rs1, bb:$imm16)>;
+def : Pat<(ZodiacBrCC SETULE, GPR:$rs1, GPR:$rs2, bb:$imm16),
+          (BGEU GPR:$rs2, GPR:$rs1, bb:$imm16)>;
+
+// Patterns for setcc (SETLT and SETULT)
+def : Pat<(setcc GPR:$rs1, GPR:$rs2, SETLT),
+          (SLT GPR:$rs1, GPR:$rs2)>;
+def : Pat<(setcc GPR:$rs1, simm16:$imm16, SETLT),
+          (SLTI GPR:$rs1, simm16:$imm16)>;
+def : Pat<(setcc GPR:$rs1, GPR:$rs2, SETULT),
+          (SLTU GPR:$rs1, GPR:$rs2)>;
+def : Pat<(setcc GPR:$rs1, simm16:$imm16, SETULT),
+          (SLTIU GPR:$rs1, simm16:$imm16)>;

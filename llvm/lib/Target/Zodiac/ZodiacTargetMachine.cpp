@@ -5,13 +5,8 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
-//
-// Implements the info about Zodiac target spec.
-//
-//===----------------------------------------------------------------------===//
 
 #include "ZodiacTargetMachine.h"
-
 #include "Zodiac.h"
 #include "ZodiacMachineFunctionInfo.h"
 #include "ZodiacTargetObjectFile.h"
@@ -28,13 +23,11 @@
 using namespace llvm;
 
 extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void LLVMInitializeZodiacTarget() {
-  // Register the target.
   RegisterTargetMachine<ZodiacTargetMachine> registered_target(
       getTheZodiacTarget());
   PassRegistry &PR = *PassRegistry::getPassRegistry();
   initializeZodiacAsmPrinterPass(PR);
   initializeZodiacDAGToDAGISelLegacyPass(PR);
-  initializeZodiacMemAluCombinerPass(PR);
 }
 
 static Reloc::Model getEffectiveRelocModel(std::optional<Reloc::Model> RM) {
@@ -47,13 +40,21 @@ ZodiacTargetMachine::ZodiacTargetMachine(
     std::optional<CodeModel::Model> CodeModel, CodeGenOptLevel OptLevel,
     bool JIT)
     : CodeGenTargetMachineImpl(
-          T, TT.computeDataLayout(), TT, Cpu, FeatureString, Options,
+          T, "E-m:e-p:32:32-i64:64-n32-S64", TT, Cpu, FeatureString, Options,
           getEffectiveRelocModel(RM),
           getEffectiveCodeModel(CodeModel, CodeModel::Medium), OptLevel),
       Subtarget(TT, Cpu, FeatureString, *this, Options, getCodeModel(),
                 OptLevel),
       TLOF(new ZodiacTargetObjectFile()) {
   initAsmInfo();
+
+  // Disable verbose assembly output by default — the Zodiac bare-metal
+  // assembler doesn't understand comments. Can be re-enabled with
+  // -asm-verbose=1.
+  this->Options.MCOptions.AsmVerbose = false;
+
+  // Disable .addrsig directive — Zodiac is bare-metal with no linker support.
+  this->Options.EmitAddrsig = false;
 }
 
 TargetTransformInfo
@@ -69,7 +70,6 @@ MachineFunctionInfo *ZodiacTargetMachine::createMachineFunctionInfo(
 }
 
 namespace {
-// Zodiac Code Generator Pass Configuration Options.
 class ZodiacPassConfig : public TargetPassConfig {
 public:
   ZodiacPassConfig(ZodiacTargetMachine &TM, PassManagerBase *PassManager)
@@ -81,8 +81,6 @@ public:
 
   void addIRPasses() override;
   bool addInstSelector() override;
-  void addPreSched2() override;
-  void addPreEmitPass() override;
 };
 } // namespace
 
@@ -93,24 +91,10 @@ ZodiacTargetMachine::createPassConfig(PassManagerBase &PassManager) {
 
 void ZodiacPassConfig::addIRPasses() {
   addPass(createAtomicExpandLegacyPass());
-
   TargetPassConfig::addIRPasses();
 }
 
-// Install an instruction selector pass.
 bool ZodiacPassConfig::addInstSelector() {
   addPass(createZodiacISelDag(getZodiacTargetMachine()));
   return false;
-}
-
-// Implemented by targets that want to run passes immediately before
-// machine code is emitted.
-void ZodiacPassConfig::addPreEmitPass() {
-  addPass(createZodiacDelaySlotFillerPass(getZodiacTargetMachine()));
-}
-
-// Run passes after prolog-epilog insertion and before the second instruction
-// scheduling pass.
-void ZodiacPassConfig::addPreSched2() {
-  addPass(createZodiacMemAluCombinerPass());
 }

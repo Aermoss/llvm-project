@@ -13,11 +13,9 @@
 #ifndef LLVM_LIB_TARGET_ZODIAC_ZODIACSELECTIONDAGINFO_H
 #define LLVM_LIB_TARGET_ZODIAC_ZODIACSELECTIONDAGINFO_H
 
+#include "Zodiac.h"
 #include "llvm/CodeGen/SelectionDAGTargetInfo.h"
 #include "llvm/Target/TargetMachine.h"
-
-#define GET_SDNODE_ENUM
-#include "ZodiacGenSDNodeInfo.inc"
 
 namespace llvm {
 

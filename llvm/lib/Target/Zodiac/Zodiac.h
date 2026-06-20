@@ -1,4 +1,4 @@
-//===-- Zodiac.h - Top-level interface for Zodiac representation --*- C++ -*-===//
+//=====-- Zodiac.h - Top-level interface for Zodiac ----------*- C++ -*--===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -14,32 +14,20 @@
 #ifndef LLVM_LIB_TARGET_ZODIAC_ZODIAC_H
 #define LLVM_LIB_TARGET_ZODIAC_ZODIAC_H
 
-#include "llvm/Pass.h"
+#include "llvm/Target/TargetMachine.h"
+
+#define GET_SDNODE_ENUM
+#include "ZodiacGenSDNodeInfo.inc"
 
 namespace llvm {
-class FunctionPass;
 class ZodiacTargetMachine;
+class FunctionPass;
 class PassRegistry;
 
-// createZodiacISelDag - This pass converts a legalized DAG into a
-// Zodiac-specific DAG, ready for instruction scheduling.
 FunctionPass *createZodiacISelDag(ZodiacTargetMachine &TM);
-
-// createZodiacDelaySlotFillerPass - This pass fills delay slots
-// with useful instructions or nop's
-FunctionPass *createZodiacDelaySlotFillerPass(const ZodiacTargetMachine &TM);
-
-// createZodiacMemAluCombinerPass - This pass combines loads/stores and
-// arithmetic operations.
-FunctionPass *createZodiacMemAluCombinerPass();
-
-// createZodiacSetflagAluCombinerPass - This pass combines SET_FLAG and ALU
-// operations.
-FunctionPass *createZodiacSetflagAluCombinerPass();
 
 void initializeZodiacAsmPrinterPass(PassRegistry &);
 void initializeZodiacDAGToDAGISelLegacyPass(PassRegistry &);
-void initializeZodiacMemAluCombinerPass(PassRegistry &);
 
 } // namespace llvm
 

@@ -13,24 +13,16 @@
 
 namespace llvm {
 namespace Zodiac {
-// Although most of the current fixup types reflect a unique relocation
-// one can have multiple fixup types for a given relocation and thus need
-// to be uniquely named.
-//
-// This table *must* be in the save order of
-// MCFixupKindInfo Infos[Zodiac::NumTargetFixupKinds]
-// in ZodiacAsmBackend.cpp.
-//
 enum Fixups {
   // Results in R_Zodiac_NONE
   FIXUP_ZODIAC_NONE = FirstTargetFixupKind,
 
-  FIXUP_ZODIAC_21,   // 21-bit symbol relocation
-  FIXUP_ZODIAC_21_F, // 21-bit symbol relocation, last two bits masked to 0
-  FIXUP_ZODIAC_25,   // 25-bit branch targets
-  FIXUP_ZODIAC_32,   // general 32-bit relocation
-  FIXUP_ZODIAC_HI16, // upper 16-bits of a symbolic relocation
-  FIXUP_ZODIAC_LO16, // lower 16-bits of a symbolic relocation
+  FIXUP_ZODIAC_LO11,  // lower 11 bits (relocation for ORI/ADDI)
+  FIXUP_ZODIAC_HI21,  // upper 21 bits (relocation for LUI)
+  FIXUP_ZODIAC_IMM16, // 16-bit offset/imm (relocation for loads/stores/branches)
+  FIXUP_ZODIAC_IMM21, // 21-bit offset/imm (relocation for BL / J-type)
+  FIXUP_ZODIAC_IMM26, // 26-bit target (relocation for B / J26-type)
+  FIXUP_ZODIAC_32,    // general 32-bit relocation
 
   // Marker
   LastTargetFixupKind,

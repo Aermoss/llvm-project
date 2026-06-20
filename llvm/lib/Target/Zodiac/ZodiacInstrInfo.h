@@ -131,48 +131,6 @@ public:
                         const DebugLoc &DL,
                         int *BytesAdded = nullptr) const override;
 };
-
-static inline bool isSPLSOpcode(unsigned Opcode) {
-  switch (Opcode) {
-  case Zodiac::LDBs_RI:
-  case Zodiac::LDBz_RI:
-  case Zodiac::LDHs_RI:
-  case Zodiac::LDHz_RI:
-  case Zodiac::STB_RI:
-  case Zodiac::STH_RI:
-    return true;
-  default:
-    return false;
-  }
-}
-
-static inline bool isRMOpcode(unsigned Opcode) {
-  switch (Opcode) {
-  case Zodiac::LDW_RI:
-  case Zodiac::SW_RI:
-    return true;
-  default:
-    return false;
-  }
-}
-
-static inline bool isRRMOpcode(unsigned Opcode) {
-  switch (Opcode) {
-  case Zodiac::LDBs_RR:
-  case Zodiac::LDBz_RR:
-  case Zodiac::LDHs_RR:
-  case Zodiac::LDHz_RR:
-  case Zodiac::LDWz_RR:
-  case Zodiac::LDW_RR:
-  case Zodiac::STB_RR:
-  case Zodiac::STH_RR:
-  case Zodiac::SW_RR:
-    return true;
-  default:
-    return false;
-  }
-}
-
 } // namespace llvm
 
 #endif // LLVM_LIB_TARGET_ZODIAC_ZODIACINSTRINFO_H

@@ -11,6 +11,7 @@
 #include "llvm/BinaryFormat/ELF.h"
 #include "llvm/MC/MCELFObjectWriter.h"
 #include "llvm/MC/MCObjectWriter.h"
+#include "llvm/MC/MCValue.h"
 #include "llvm/Support/ErrorHandling.h"
 
 using namespace llvm;
@@ -29,59 +30,48 @@ protected:
   bool needsRelocateWithSymbol(const MCValue &, unsigned Type) const override;
 };
 
-} // end anonymous namespace
-
 ZodiacELFObjectWriter::ZodiacELFObjectWriter(uint8_t OSABI)
     : MCELFObjectTargetWriter(/*Is64Bit_=*/false, OSABI, ELF::EM_ZODIAC,
                               /*HasRelocationAddend_=*/true) {}
 
 unsigned ZodiacELFObjectWriter::getRelocType(const MCFixup &Fixup,
                                             const MCValue &, bool) const {
-  unsigned Type;
   unsigned Kind = static_cast<unsigned>(Fixup.getKind());
   switch (Kind) {
-  case Zodiac::FIXUP_ZODIAC_21:
-    Type = ELF::R_ZODIAC_21;
-    break;
-  case Zodiac::FIXUP_ZODIAC_21_F:
-    Type = ELF::R_ZODIAC_21_F;
-    break;
-  case Zodiac::FIXUP_ZODIAC_25:
-    Type = ELF::R_ZODIAC_25;
-    break;
+  case Zodiac::FIXUP_ZODIAC_NONE:
+    return ELF::R_ZODIAC_NONE;
+  case Zodiac::FIXUP_ZODIAC_LO11:
+    return ELF::R_ZODIAC_LO16;
+  case Zodiac::FIXUP_ZODIAC_HI21:
+    return ELF::R_ZODIAC_21;
+  case Zodiac::FIXUP_ZODIAC_IMM16:
+    return ELF::R_ZODIAC_LO16;
+  case Zodiac::FIXUP_ZODIAC_IMM21:
+    return ELF::R_ZODIAC_21;
+  case Zodiac::FIXUP_ZODIAC_IMM26:
+    return ELF::R_ZODIAC_25;
   case Zodiac::FIXUP_ZODIAC_32:
   case FK_Data_4:
-    Type = ELF::R_ZODIAC_32;
-    break;
-  case Zodiac::FIXUP_ZODIAC_HI16:
-    Type = ELF::R_ZODIAC_HI16;
-    break;
-  case Zodiac::FIXUP_ZODIAC_LO16:
-    Type = ELF::R_ZODIAC_LO16;
-    break;
-  case Zodiac::FIXUP_ZODIAC_NONE:
-    Type = ELF::R_ZODIAC_NONE;
-    break;
-
+    return ELF::R_ZODIAC_32;
   default:
     llvm_unreachable("Invalid fixup kind!");
   }
-  return Type;
 }
 
 bool ZodiacELFObjectWriter::needsRelocateWithSymbol(const MCValue &,
                                                    unsigned Type) const {
   switch (Type) {
   case ELF::R_ZODIAC_21:
-  case ELF::R_ZODIAC_21_F:
   case ELF::R_ZODIAC_25:
   case ELF::R_ZODIAC_32:
-  case ELF::R_ZODIAC_HI16:
+  case ELF::R_ZODIAC_LO16:
     return true;
   default:
     return false;
   }
 }
+
+} // end anonymous namespace
 
 std::unique_ptr<MCObjectTargetWriter>
 llvm::createZodiacELFObjectWriter(uint8_t OSABI) {

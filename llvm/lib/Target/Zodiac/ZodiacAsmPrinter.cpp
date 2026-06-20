@@ -5,14 +5,7 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
-//
-// This file contains a printer that converts from our internal representation
-// of machine-dependent LLVM code to the Zodiac assembly language.
-//
-//===----------------------------------------------------------------------===//
 
-#include "ZodiacAluCode.h"
-#include "ZodiacCondCode.h"
 #include "ZodiacMCInstLower.h"
 #include "ZodiacTargetMachine.h"
 #include "MCTargetDesc/ZodiacInstPrinter.h"
@@ -29,6 +22,7 @@
 #include "llvm/MC/TargetRegistry.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Target/TargetLoweringObjectFile.h"
 
 #define DEBUG_TYPE "asm-printer"
 
@@ -50,9 +44,11 @@ public:
   bool isBlockOnlyReachableByFallthrough(
       const MachineBasicBlock *MBB) const override;
 
-private:
-  void customEmitInstruction(const MachineInstr *MI);
-  void emitCallInstruction(const MachineInstr *MI);
+  // Suppress all ELF/OS directives for bare-metal output.
+  void emitStartOfAsmFile(Module &M) override {} // No .text
+  void emitEndOfAsmFile(Module &M) override {}   // No .section ".note.GNU-stack"
+  void emitFunctionHeader() override;            // Just the label, no .globl/.p2align/.type
+  void emitFunctionBodyEnd() override {}         // No .Lfunc_end / .size
 
 public:
   static char ID;
@@ -105,131 +101,91 @@ void ZodiacAsmPrinter::printOperand(const MachineInstr *MI, int OpNum,
   }
 }
 
-// PrintAsmOperand - Print out an operand for an inline asm expression.
 bool ZodiacAsmPrinter::PrintAsmOperand(const MachineInstr *MI, unsigned OpNo,
                                       const char *ExtraCode, raw_ostream &O) {
-  // Does this asm operand have a single letter operand modifier?
-  if (ExtraCode && ExtraCode[0]) {
-    if (ExtraCode[1])
-      return true; // Unknown modifier.
-
-    switch (ExtraCode[0]) {
-    // The highest-numbered register of a pair.
-    case 'H': {
-      if (OpNo == 0)
-        return true;
-      const MachineOperand &FlagsOP = MI->getOperand(OpNo - 1);
-      if (!FlagsOP.isImm())
-        return true;
-      const InlineAsm::Flag Flags(FlagsOP.getImm());
-      const unsigned NumVals = Flags.getNumOperandRegisters();
-      if (NumVals != 2)
-        return true;
-      unsigned RegOp = OpNo + 1;
-      if (RegOp >= MI->getNumOperands())
-        return true;
-      const MachineOperand &MO = MI->getOperand(RegOp);
-      if (!MO.isReg())
-        return true;
-      Register Reg = MO.getReg();
-      O << ZodiacInstPrinter::getRegisterName(Reg);
-      return false;
-    }
-    default:
-      return AsmPrinter::PrintAsmOperand(MI, OpNo, ExtraCode, O);
-    }
-  }
   printOperand(MI, OpNo, O);
   return false;
-}
-
-//===----------------------------------------------------------------------===//
-void ZodiacAsmPrinter::emitCallInstruction(const MachineInstr *MI) {
-  assert((MI->getOpcode() == Zodiac::CALL || MI->getOpcode() == Zodiac::CALLR) &&
-         "Unsupported call function");
-
-  ZodiacMCInstLower MCInstLowering(OutContext, *this);
-  MCSubtargetInfo STI = getSubtargetInfo();
-  // Insert save rca instruction immediately before the call.
-  // TODO: We should generate a pc-relative mov instruction here instead
-  // of pc + 16 (should be mov .+16 %rca).
-  OutStreamer->emitInstruction(MCInstBuilder(Zodiac::ADD_I_LO)
-                                   .addReg(Zodiac::RCA)
-                                   .addReg(Zodiac::PC)
-                                   .addImm(16),
-                               STI);
-
-  // Push rca onto the stack.
-  //   st %rca, [--%sp]
-  OutStreamer->emitInstruction(MCInstBuilder(Zodiac::SW_RI)
-                                   .addReg(Zodiac::RCA)
-                                   .addReg(Zodiac::SP)
-                                   .addImm(-4)
-                                   .addImm(LPAC::makePreOp(LPAC::ADD)),
-                               STI);
-
-  // Lower the call instruction.
-  if (MI->getOpcode() == Zodiac::CALL) {
-    MCInst TmpInst;
-    MCInstLowering.Lower(MI, TmpInst);
-    TmpInst.setOpcode(Zodiac::BT);
-    OutStreamer->emitInstruction(TmpInst, STI);
-  } else {
-    OutStreamer->emitInstruction(MCInstBuilder(Zodiac::ADD_R)
-                                     .addReg(Zodiac::PC)
-                                     .addReg(MI->getOperand(0).getReg())
-                                     .addReg(Zodiac::R0)
-                                     .addImm(LPCC::ICC_T),
-                                 STI);
-  }
-}
-
-void ZodiacAsmPrinter::customEmitInstruction(const MachineInstr *MI) {
-  ZodiacMCInstLower MCInstLowering(OutContext, *this);
-  MCSubtargetInfo STI = getSubtargetInfo();
-  MCInst TmpInst;
-  MCInstLowering.Lower(MI, TmpInst);
-  OutStreamer->emitInstruction(TmpInst, STI);
 }
 
 void ZodiacAsmPrinter::emitInstruction(const MachineInstr *MI) {
   Zodiac_MC::verifyInstructionPredicates(MI->getOpcode(),
                                         getSubtargetInfo().getFeatureBits());
 
-  MachineBasicBlock::const_instr_iterator I = MI->getIterator();
-  MachineBasicBlock::const_instr_iterator E = MI->getParent()->instr_end();
+  MCSubtargetInfo STI = getSubtargetInfo();
+  ZodiacMCInstLower MCInstLowering(OutContext, *this);
+  MCInst TmpInst;
 
-  do {
-    if (I->isCall()) {
-      emitCallInstruction(&*I);
-      continue;
-    }
+  switch (MI->getOpcode()) {
+  case Zodiac::CALL: {
+    // CALL target -> BL X30, target
+    MCInst BlInst;
+    BlInst.setOpcode(Zodiac::BL);
+    BlInst.addOperand(MCOperand::createReg(Zodiac::X30));
 
-    customEmitInstruction(&*I);
-  } while ((++I != E) && I->isInsideBundle());
+    MCInst TmpCall;
+    MCInstLowering.Lower(MI, TmpCall);
+    BlInst.addOperand(TmpCall.getOperand(0));
+
+    OutStreamer->emitInstruction(BlInst, STI);
+    return;
+  }
+  case Zodiac::CALLR: {
+    // CALLR rs1 ->
+    //   AUIPC X30, 0
+    //   ADDI X30, X30, 8
+    //   BR rs1
+    Register Reg = MI->getOperand(0).getReg();
+    OutStreamer->emitInstruction(MCInstBuilder(Zodiac::AUIPC)
+                                     .addReg(Zodiac::X30)
+                                     .addImm(0),
+                                 STI);
+    OutStreamer->emitInstruction(MCInstBuilder(Zodiac::ADDI)
+                                     .addReg(Zodiac::X30)
+                                     .addReg(Zodiac::X30)
+                                     .addImm(8),
+                                 STI);
+    OutStreamer->emitInstruction(MCInstBuilder(Zodiac::BR)
+                                     .addReg(Reg),
+                                 STI);
+    return;
+  }
+  case Zodiac::RET: {
+    // RET -> BR X30
+    OutStreamer->emitInstruction(MCInstBuilder(Zodiac::BR)
+                                     .addReg(Zodiac::X30),
+                                 STI);
+    return;
+  }
+  default:
+    MCInstLowering.Lower(MI, TmpInst);
+    OutStreamer->emitInstruction(TmpInst, STI);
+    return;
+  }
 }
 
-// isBlockOnlyReachableByFallthough - Return true if the basic block has
-// exactly one predecessor and the control transfer mechanism between
-// the predecessor and this block is a fall-through.
-// FIXME: could the overridden cases be handled in analyzeBranch?
+void ZodiacAsmPrinter::emitFunctionHeader() {
+  // Emit just the bare label — no .globl, no .p2align, no .type.
+  // The default emitFunctionHeader emits linkage, alignment, type directives,
+  // and section switches — none of which are needed for bare-metal.
+  //
+  // We must still set the section internally so the MC layer doesn't crash.
+  const Function &F = MF->getFunction();
+  MF->setSection(getObjFileLowering().SectionForGlobal(&F, TM));
+  OutStreamer->switchSection(MF->getSection());
+
+  OutStreamer->emitLabel(CurrentFnSym);
+}
+
 bool ZodiacAsmPrinter::isBlockOnlyReachableByFallthrough(
     const MachineBasicBlock *MBB) const {
-  // The predecessor has to be immediately before this block.
   const MachineBasicBlock *Pred = *MBB->pred_begin();
-
-  // If the predecessor is a switch statement, assume a jump table
-  // implementation, so it is not a fall through.
   if (const BasicBlock *B = Pred->getBasicBlock())
     if (isa<SwitchInst>(B->getTerminator()))
       return false;
 
-  // Check default implementation
   if (!AsmPrinter::isBlockOnlyReachableByFallthrough(MBB))
     return false;
 
-  // Otherwise, check the last instruction.
-  // Check if the last terminator is an unconditional branch.
   MachineBasicBlock::const_iterator I = Pred->end();
   while (I != Pred->begin() && !(--I)->isTerminator()) {
   }
@@ -242,7 +198,6 @@ char ZodiacAsmPrinter::ID = 0;
 INITIALIZE_PASS(ZodiacAsmPrinter, "zodiac-asm-printer", "Zodiac Assembly Printer",
                 false, false)
 
-// Force static initialization.
 extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void
 LLVMInitializeZodiacAsmPrinter() {
   RegisterAsmPrinter<ZodiacAsmPrinter> X(getTheZodiacTarget());

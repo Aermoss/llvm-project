@@ -1,18 +1,12 @@
-//=-- ZodiacMCInstLower.cpp - Convert Zodiac MachineInstr to an MCInst --------=//
+//===-- ZodiacMCInstLower.cpp - Convert Zodiac MachineInstr to an MCInst ------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
-//
-// This file contains code to lower Zodiac MachineInstrs to their corresponding
-// MCInst records.
-//
-//===----------------------------------------------------------------------===//
 
 #include "ZodiacMCInstLower.h"
-
 #include "MCTargetDesc/ZodiacBaseInfo.h"
 #include "MCTargetDesc/ZodiacMCAsmInfo.h"
 #include "llvm/ADT/SmallString.h"
@@ -48,7 +42,6 @@ MCSymbol *ZodiacMCInstLower::GetJumpTableSymbol(const MachineOperand &MO) const 
   raw_svector_ostream(Name)
       << Printer.MAI.getInternalSymbolPrefix() << "JTI"
       << Printer.getFunctionNumber() << '_' << MO.getIndex();
-  // Create a symbol for the name.
   return Ctx.getOrCreateSymbol(Name.str());
 }
 
@@ -58,7 +51,6 @@ ZodiacMCInstLower::GetConstantPoolIndexSymbol(const MachineOperand &MO) const {
   raw_svector_ostream(Name)
       << Printer.MAI.getInternalSymbolPrefix() << "CPI"
       << Printer.getFunctionNumber() << '_' << MO.getIndex();
-  // Create a symbol for the name.
   return Ctx.getOrCreateSymbol(Name.str());
 }
 
@@ -69,10 +61,10 @@ MCOperand ZodiacMCInstLower::LowerSymbolOperand(const MachineOperand &MO,
   case ZodiacII::MO_NO_FLAG:
     Kind = Zodiac::S_None;
     break;
-  case ZodiacII::MO_ABS_HI:
+  case ZodiacII::MO_HI21:
     Kind = Zodiac::S_ABS_HI;
     break;
-  case ZodiacII::MO_ABS_LO:
+  case ZodiacII::MO_LO11:
     Kind = Zodiac::S_ABS_LO;
     break;
   default:
@@ -94,7 +86,6 @@ void ZodiacMCInstLower::Lower(const MachineInstr *MI, MCInst &OutMI) const {
     MCOperand MCOp;
     switch (MO.getType()) {
     case MachineOperand::MO_Register:
-      // Ignore all implicit register operands.
       if (MO.isImplicit())
         continue;
       MCOp = MCOperand::createReg(MO.getReg());

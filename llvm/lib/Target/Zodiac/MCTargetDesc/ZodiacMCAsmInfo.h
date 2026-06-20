@@ -13,13 +13,13 @@
 #ifndef LLVM_LIB_TARGET_ZODIAC_MCTARGETDESC_ZODIACMCASMINFO_H
 #define LLVM_LIB_TARGET_ZODIAC_MCTARGETDESC_ZODIACMCASMINFO_H
 
-#include "llvm/MC/MCAsmInfoELF.h"
+#include "llvm/MC/MCAsmInfo.h"
 
 namespace llvm {
 class Triple;
 
-class ZodiacMCAsmInfo : public MCAsmInfoELF {
-  void anchor() override;
+class ZodiacMCAsmInfo : public MCAsmInfo {
+  void anchor();
 
 public:
   explicit ZodiacMCAsmInfo(const Triple &TheTriple,

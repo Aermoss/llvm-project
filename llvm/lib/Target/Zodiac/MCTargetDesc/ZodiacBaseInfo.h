@@ -6,8 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file contains small standalone helper functions and enum definitions for
-// the Zodiac target useful for the compiler back-end and the MC libraries.
+// This file contains helper functions and enum definitions for the Zodiac target.
 //
 //===----------------------------------------------------------------------===//
 
@@ -21,98 +20,53 @@
 
 namespace llvm {
 
-// ZodiacII - This namespace holds all of the target specific flags that
-// instruction info tracks.
 namespace ZodiacII {
-// Target Operand Flag enum.
 enum TOF {
-  //===------------------------------------------------------------------===//
-  // Zodiac Specific MachineOperand flags.
   MO_NO_FLAG,
-
-  // MO_ABS_HI/LO - Represents the hi or low part of an absolute symbol
-  // address.
-  MO_ABS_HI,
-  MO_ABS_LO,
+  MO_HI21,
+  MO_LO11
 };
 } // namespace ZodiacII
 
 static inline unsigned getZodiacRegisterNumbering(MCRegister Reg) {
   switch (Reg.id()) {
-  case Zodiac::R0:
-    return 0;
-  case Zodiac::R1:
-    return 1;
-  case Zodiac::R2:
-  case Zodiac::PC:
-    return 2;
-  case Zodiac::R3:
-    return 3;
-  case Zodiac::R4:
-  case Zodiac::SP:
-    return 4;
-  case Zodiac::R5:
-  case Zodiac::FP:
-    return 5;
-  case Zodiac::R6:
-    return 6;
-  case Zodiac::R7:
-    return 7;
-  case Zodiac::R8:
-  case Zodiac::RV:
-    return 8;
-  case Zodiac::R9:
-    return 9;
-  case Zodiac::R10:
-  case Zodiac::RR1:
-    return 10;
-  case Zodiac::R11:
-  case Zodiac::RR2:
-    return 11;
-  case Zodiac::R12:
-    return 12;
-  case Zodiac::R13:
-    return 13;
-  case Zodiac::R14:
-    return 14;
-  case Zodiac::R15:
-  case Zodiac::RCA:
-    return 15;
-  case Zodiac::R16:
-    return 16;
-  case Zodiac::R17:
-    return 17;
-  case Zodiac::R18:
-    return 18;
-  case Zodiac::R19:
-    return 19;
-  case Zodiac::R20:
-    return 20;
-  case Zodiac::R21:
-    return 21;
-  case Zodiac::R22:
-    return 22;
-  case Zodiac::R23:
-    return 23;
-  case Zodiac::R24:
-    return 24;
-  case Zodiac::R25:
-    return 25;
-  case Zodiac::R26:
-    return 26;
-  case Zodiac::R27:
-    return 27;
-  case Zodiac::R28:
-    return 28;
-  case Zodiac::R29:
-    return 29;
-  case Zodiac::R30:
-    return 30;
-  case Zodiac::R31:
-    return 31;
+  case Zodiac::X0: return 0;
+  case Zodiac::X1: return 1;
+  case Zodiac::X2: return 2;
+  case Zodiac::X3: return 3;
+  case Zodiac::X4: return 4;
+  case Zodiac::X5: return 5;
+  case Zodiac::X6: return 6;
+  case Zodiac::X7: return 7;
+  case Zodiac::X8: return 8;
+  case Zodiac::X9: return 9;
+  case Zodiac::X10: return 10;
+  case Zodiac::X11: return 11;
+  case Zodiac::X12: return 12;
+  case Zodiac::X13: return 13;
+  case Zodiac::X14: return 14;
+  case Zodiac::X15: return 15;
+  case Zodiac::X16: return 16;
+  case Zodiac::X17: return 17;
+  case Zodiac::X18: return 18;
+  case Zodiac::X19: return 19;
+  case Zodiac::X20: return 20;
+  case Zodiac::X21: return 21;
+  case Zodiac::X22: return 22;
+  case Zodiac::X23: return 23;
+  case Zodiac::X24: return 24;
+  case Zodiac::X25: return 25;
+  case Zodiac::X26: return 26;
+  case Zodiac::X27: return 27;
+  case Zodiac::X28: return 28;
+  case Zodiac::X29: return 29;
+  case Zodiac::X30: return 30;
+  case Zodiac::X31: return 31;
   default:
     llvm_unreachable("Unknown register number!");
   }
 }
+
 } // namespace llvm
+
 #endif // LLVM_LIB_TARGET_ZODIAC_MCTARGETDESC_ZODIACBASEINFO_H

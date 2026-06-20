@@ -719,6 +719,7 @@ Triple::ArchType Triple::getArchTypeForLLVMName(StringRef Name) {
       .Case("spirv64", spirv64)
       .Case("kalimba", kalimba)
       .Case("lanai", lanai)
+      .Case("zodiac", zodiac)
       .Case("shave", shave)
       .Case("wasm32", wasm32)
       .Case("wasm64", wasm64)
@@ -869,6 +870,7 @@ Triple::ArchType Triple::parseArch(StringRef ArchName) {
                  Triple::spirv64)
           .StartsWith("kalimba", Triple::kalimba)
           .Case("lanai", Triple::lanai)
+          .Case("zodiac", Triple::zodiac)
           .Case("renderscript32", Triple::renderscript32)
           .Case("renderscript64", Triple::renderscript64)
           .Case("shave", Triple::shave)
@@ -1215,6 +1217,7 @@ static Triple::ObjectFormatType getDefaultFormat(const Triple &T) {
   case Triple::hsail:
   case Triple::kalimba:
   case Triple::lanai:
+  case Triple::zodiac:
   case Triple::loongarch32:
   case Triple::loongarch64:
   case Triple::m68k:
@@ -1988,6 +1991,7 @@ unsigned Triple::getArchPointerBitWidth(llvm::Triple::ArchType Arch) {
   case llvm::Triple::hsail:
   case llvm::Triple::kalimba:
   case llvm::Triple::lanai:
+  case llvm::Triple::zodiac:
   case llvm::Triple::loongarch32:
   case llvm::Triple::m68k:
   case llvm::Triple::mips:
@@ -2099,6 +2103,7 @@ Triple Triple::get32BitArchVariant() const {
   case Triple::hsail:
   case Triple::kalimba:
   case Triple::lanai:
+  case Triple::zodiac:
   case Triple::loongarch32:
   case Triple::m68k:
   case Triple::mips:
@@ -2199,6 +2204,7 @@ Triple Triple::get64BitArchVariant() const {
   case Triple::hexagon:
   case Triple::kalimba:
   case Triple::lanai:
+  case Triple::zodiac:
   case Triple::m68k:
   case Triple::msp430:
   case Triple::r600:

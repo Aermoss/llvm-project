@@ -21,23 +21,25 @@ void ZodiacMCAsmInfo::anchor() {}
 
 ZodiacMCAsmInfo::ZodiacMCAsmInfo(const Triple & /*TheTriple*/,
                                const MCTargetOptions &Options)
-    : MCAsmInfoELF(Options) {
+    : MCAsmInfo(Options) {
   IsLittleEndian = false;
-  InternalSymbolPrefix = ".L";
-  WeakRefDirective = "\t.weak\t";
-  ExceptionsType = ExceptionHandling::DwarfCFI;
 
-  // Zodiac assembly requires ".section" before ".bss"
-  UsesELFSectionDirectiveForBSS = true;
+  // Use '__L' as internal prefix since the assembler's lexer
+  // treats '.' as an invalid symbol character.
+  InternalSymbolPrefix = "__L";
 
-  // Use '!' as comment string to correspond with old toolchain.
-  CommentString = "!";
+  // Suppress all ELF directives — Zodiac is bare-metal, no OS, no ELF loader.
+  HasDotTypeDotSizeDirective = false;  // No .type / .size
+  HasSingleParameterDotFile = false;   // No .file "name"
 
-  // Target supports emission of debugging information.
-  SupportsDebugInformation = true;
+  // No exception handling or debug info on bare metal.
+  ExceptionsType = ExceptionHandling::None;
+  SupportsDebugInformation = false;
 
-  // Set the instruction alignment. Currently used only for address adjustment
-  // in dwarf generation.
+  // Use ';' as comment string to match the Zodiac assembler.
+  CommentString = ";";
+
+  // Set the instruction alignment.
   MinInstAlignment = 4;
 }
 

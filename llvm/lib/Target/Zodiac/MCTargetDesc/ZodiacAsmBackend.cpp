@@ -19,7 +19,6 @@
 
 using namespace llvm;
 
-// Prepare value for the target space
 static unsigned adjustFixupValue(unsigned Kind, uint64_t Value) {
   switch (Kind) {
   case FK_Data_1:
@@ -27,12 +26,17 @@ static unsigned adjustFixupValue(unsigned Kind, uint64_t Value) {
   case FK_Data_4:
   case FK_Data_8:
     return Value;
-  case Zodiac::FIXUP_ZODIAC_21:
-  case Zodiac::FIXUP_ZODIAC_21_F:
-  case Zodiac::FIXUP_ZODIAC_25:
+  case Zodiac::FIXUP_ZODIAC_LO11:
+    return Value & 0x7FF;
+  case Zodiac::FIXUP_ZODIAC_HI21:
+    return (Value >> 11) & 0x1FFFFF;
+  case Zodiac::FIXUP_ZODIAC_IMM16:
+    return Value & 0xFFFF;
+  case Zodiac::FIXUP_ZODIAC_IMM21:
+    return Value & 0x1FFFFF;
+  case Zodiac::FIXUP_ZODIAC_IMM26:
+    return Value & 0x3FFFFFF;
   case Zodiac::FIXUP_ZODIAC_32:
-  case Zodiac::FIXUP_ZODIAC_HI16:
-  case Zodiac::FIXUP_ZODIAC_LO16:
     return Value;
   default:
     llvm_unreachable("Unknown fixup kind!");
@@ -65,7 +69,7 @@ bool ZodiacAsmBackend::writeNopData(raw_ostream &OS, uint64_t Count,
     return false;
 
   for (uint64_t i = 0; i < Count; i += 4)
-    OS.write("\x15\0\0\0", 4);
+    OS.write("\0\0\0\0", 4);
 
   return true;
 }
@@ -81,15 +85,11 @@ void ZodiacAsmBackend::applyFixup(const MCFragment &F, const MCFixup &Fixup,
   if (!Value)
     return; // This value doesn't change the encoding
 
-  // Where in the object and where the number of bytes that need
-  // fixing up
   unsigned NumBytes = (getFixupKindInfo(Kind).TargetSize + 7) / 8;
   unsigned FullSize = 4;
 
-  // Grab current value, if any, from bits.
   uint64_t CurVal = 0;
 
-  // Load instruction and apply value
   for (unsigned i = 0; i != NumBytes; ++i) {
     unsigned Idx = (FullSize - 1 - i);
     CurVal |= static_cast<uint64_t>(static_cast<uint8_t>(Data[Idx])) << (i * 8);
@@ -99,7 +99,6 @@ void ZodiacAsmBackend::applyFixup(const MCFragment &F, const MCFixup &Fixup,
       (static_cast<uint64_t>(-1) >> (64 - getFixupKindInfo(Kind).TargetSize));
   CurVal |= Value & Mask;
 
-  // Write out the fixed up bytes back to the code/data bits.
   for (unsigned i = 0; i != NumBytes; ++i) {
     unsigned Idx = (FullSize - 1 - i);
     Data[Idx] = static_cast<uint8_t>((CurVal >> (i * 8)) & 0xff);
@@ -113,23 +112,13 @@ ZodiacAsmBackend::createObjectTargetWriter() const {
 
 MCFixupKindInfo ZodiacAsmBackend::getFixupKindInfo(MCFixupKind Kind) const {
   static const MCFixupKindInfo Infos[Zodiac::NumTargetFixupKinds] = {
-      // This table *must* be in same the order of fixup_* kinds in
-      // ZodiacFixupKinds.h.
-      // Note: The number of bits indicated here are assumed to be contiguous.
-      //   This does not hold true for ZODIAC_21 and ZODIAC_21_F which are applied
-      //   to bits 0x7cffff and 0x7cfffc, respectively. Since the 'bits' counts
-      //   here are used only for cosmetic purposes, we set the size to 16 bits
-      //   for these 21-bit relocation as llvm/lib/MC/MCAsmStreamer.cpp checks
-      //   no bits are set in the fixup range.
-      //
-      // name          offset bits flags
-      {"FIXUP_ZODIAC_NONE", 0, 32, 0},
-      {"FIXUP_ZODIAC_21", 16, 16 /*21*/, 0},
-      {"FIXUP_ZODIAC_21_F", 16, 16 /*21*/, 0},
-      {"FIXUP_ZODIAC_25", 7, 25, 0},
-      {"FIXUP_ZODIAC_32", 0, 32, 0},
-      {"FIXUP_ZODIAC_HI16", 16, 16, 0},
-      {"FIXUP_ZODIAC_LO16", 16, 16, 0}};
+      // name, offset, bits, flags
+      {"FIXUP_ZODIAC_LO11", 16, 16, 0},
+      {"FIXUP_ZODIAC_HI21", 11, 21, 0},
+      {"FIXUP_ZODIAC_IMM16", 16, 16, 0},
+      {"FIXUP_ZODIAC_IMM21", 11, 21, 0},
+      {"FIXUP_ZODIAC_IMM26", 6, 26, 0},
+      {"FIXUP_ZODIAC_32", 0, 32, 0}};
 
   if (Kind < FirstTargetFixupKind)
     return MCAsmBackend::getFixupKindInfo(Kind);

@@ -48,7 +48,7 @@ static MCInstrInfo *createZodiacMCInstrInfo() {
 
 static MCRegisterInfo *createZodiacMCRegisterInfo(const Triple & /*TT*/) {
   MCRegisterInfo *X = new MCRegisterInfo();
-  InitZodiacMCRegisterInfo(X, Zodiac::RCA, 0, 0, Zodiac::PC);
+  InitZodiacMCRegisterInfo(X, Zodiac::X30, 0, 0, Zodiac::X30);
   return X;
 }
 
@@ -96,28 +96,7 @@ public:
 
   bool evaluateBranch(const MCInst &Inst, uint64_t Addr, uint64_t Size,
                       uint64_t &Target) const override {
-    if (Inst.getNumOperands() == 0)
-      return false;
-    if (!isConditionalBranch(Inst) && !isUnconditionalBranch(Inst) &&
-        !isCall(Inst))
-      return false;
-
-    if (Info->get(Inst.getOpcode()).operands()[0].OperandType ==
-        MCOI::OPERAND_PCREL) {
-      int64_t Imm = Inst.getOperand(0).getImm();
-      Target = Addr + Size + Imm;
-      return true;
-    } else {
-      int64_t Imm = Inst.getOperand(0).getImm();
-
-      // Skip case where immediate is 0 as that occurs in file that isn't linked
-      // and the branch target inferred would be wrong.
-      if (Imm == 0)
-        return false;
-
-      Target = Imm;
-      return true;
-    }
+    return false;
   }
 };
 

@@ -17,14 +17,12 @@ add_public_tablegen_target(ZodiacCommonTableGen)
 
 add_llvm_target(ZodiacCodeGen
   ZodiacAsmPrinter.cpp
-  ZodiacDelaySlotFiller.cpp
   ZodiacFrameLowering.cpp
   ZodiacInstrInfo.cpp
   ZodiacISelDAGToDAG.cpp
   ZodiacISelLowering.cpp
   ZodiacMachineFunctionInfo.cpp
   ZodiacMCInstLower.cpp
-  ZodiacMemAluCombiner.cpp
   ZodiacRegisterInfo.cpp
   ZodiacSelectionDAGInfo.cpp
   ZodiacSubtarget.cpp

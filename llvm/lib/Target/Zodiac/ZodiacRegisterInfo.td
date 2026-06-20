@@ -1,4 +1,4 @@
-//===- ZodiacRegisterInfo.td - Zodiac Register defs ------------*- tablegen -*-===//
+//===- ZodiacRegisterInfo.td - Zodiac Register defs ----------*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -9,55 +9,45 @@
 //===----------------------------------------------------------------------===//
 
 // Registers are identified with 5-bit ID numbers.
-class ZodiacReg<bits<5> num, string n, list<Register> subregs = [],
-               list<string> altNames = []> : Register<n, altNames> {
+class ZodiacReg<bits<5> num, string n, list<string> altNames = []>
+    : Register<n, altNames> {
   field bits<5> Num;
   let Num = num;
   let Namespace = "Zodiac";
-  let SubRegs = subregs;
 }
 
-let Namespace = "Zodiac" in {
-  def sub_32 : SubRegIndex<32>;
-}
-
-// Integer registers
+// Integer registers x0-x31
+// x0 is hardwired to zero.
 foreach i = 0-31 in {
-  def R#i : ZodiacReg<i, "r"#i>, DwarfRegNum<[i]>;
+  def X#i : ZodiacReg<i, "x"#i>, DwarfRegNum<[i]>;
 }
-
-// Register aliases
-let SubRegIndices = [sub_32] in {
-  def PC  : ZodiacReg< 2,  "pc",  [R2]>,  DwarfRegAlias<R2>;
-  def SP  : ZodiacReg< 4,  "sp",  [R4]>,  DwarfRegAlias<R4>;
-  def FP  : ZodiacReg< 5,  "fp",  [R5]>,  DwarfRegAlias<R5>;
-  def RV  : ZodiacReg< 8,  "rv",  [R8]>,  DwarfRegAlias<R8>;
-  def RR1 : ZodiacReg<10, "rr1", [R10]>, DwarfRegAlias<R10>;
-  def RR2 : ZodiacReg<11, "rr2", [R11]>, DwarfRegAlias<R11>;
-  def RCA : ZodiacReg<15, "rca", [R15]>, DwarfRegAlias<R15>;
-}
-
-// Define a status register to capture the dependencies between the set flag
-// and setcc instructions
-def SR : ZodiacReg< 0, "sw">;
 
 // Register classes.
+//
+// Convention:
+//   x0       = zero (hardwired)
+//   x1-x4    = arguments / return values (caller-saved)
+//   x5-x11   = temporaries (caller-saved)
+//   x12-x27  = saved registers (callee-saved)
+//   x28      = temporary (caller-saved)
+//   x29      = frame pointer (callee-saved)
+//   x30      = return address / link register (callee-saved)
+//   x31      = stack pointer
 def GPR : RegisterClass<"Zodiac", [i32], 32,
-    (add R3, R9, R12, R13, R14, R16, R17,
-     (sequence "R%i", 20, 31),
-     R6, R7, R18, R19, // registers for passing arguments
-     R15, RCA, // register for constant addresses
-     R10, RR1, R11, RR2, // programmer controlled registers
-     R8,  RV,  // return value
-     R5,  FP,  // frame pointer
-     R4,  SP,  // stack pointer
-     R2,  PC,  // program counter
-     R1,       // all 1s (0xffffffff)
-     R0        // constant 0
+    (add
+     // Argument / return value registers (caller-saved, allocated first)
+     X1, X2, X3, X4,
+     // Temporaries (caller-saved)
+     X5, X6, X7, X8, X9, X10, X11, X28,
+     // Callee-saved registers
+     X12, X13, X14, X15, X16, X17,
+     X18, X19, X20, X21, X22, X23, X24, X25, X26, X27,
+     // Frame pointer (callee-saved)
+     X29,
+     // Return address (callee-saved)
+     X30,
+     // Stack pointer (reserved)
+     X31,
+     // Zero register (never allocated)
+     X0
     )>;
-
-// Condition code register class
-def CCR : RegisterClass<"Zodiac", [i32], 32, (add SR)> {
-  let CopyCost = -1; // Don't allow copying of status registers
-  let isAllocatable = 0;
-}

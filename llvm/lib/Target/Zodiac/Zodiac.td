@@ -1,4 +1,4 @@
-//===- Zodiac.td - Describe the Zodiac Target Machine --------*- tablegen -*-===//
+//===- Zodiac.td - Describe the Zodiac Target Machine ------*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -21,8 +21,6 @@ include "ZodiacRegisterInfo.td"
 include "ZodiacCallingConv.td"
 include "ZodiacInstrInfo.td"
 
-defm : RemapAllTargetPseudoPointerOperands<GPR>;
-
 def ZodiacInstrInfo : InstrInfo;
 
 //===----------------------------------------------------------------------===//
@@ -30,7 +28,6 @@ def ZodiacInstrInfo : InstrInfo;
 //===----------------------------------------------------------------------===//
 
 def : ProcessorModel<"generic", ZodiacSchedModel, []>;
-def : ProcessorModel<"v11", ZodiacSchedModel, []>;
 
 def ZodiacInstPrinter : AsmWriter {
   string AsmWriterClassName  = "InstPrinter";
@@ -46,3 +43,5 @@ def Zodiac : Target {
   let InstructionSet = ZodiacInstrInfo;
   let AssemblyWriters = [ZodiacInstPrinter];
 }
+
+defm : RemapAllTargetPseudoPointerOperands<GPR>;
